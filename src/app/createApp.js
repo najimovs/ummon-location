@@ -105,6 +105,7 @@ export function createApp() {
 			</section>
 
 			<div class="map-hint is-hidden"><span><i data-lucide="locate-fixed"></i></span> Xaritadan nuqtani tanlang</div>
+			<div class="brand-filter is-hidden"><span><small>BRAND MODE</small><strong id="brand-filter-name">EVOS</strong><b id="brand-filter-count">0 ta filial</b></span><button type="button" aria-label="Brand filtrini yopish"><i data-lucide="x"></i></button></div>
 			<div class="map-tools"><button type="button" data-map-action="in" aria-label="Xaritani kattalashtirish"><i data-lucide="plus"></i></button><button type="button" data-map-action="out" aria-label="Xaritani kichraytirish"><i data-lucide="minus"></i></button></div>
 		</main>
 	` )
@@ -134,6 +135,7 @@ export function createApp() {
 	const action = get( "#primary-action" )
 	const searchInput = get( ".map-search input" )
 	const searchPanel = get( ".search-results" )
+	const brandFilter = get( ".brand-filter" )
 	let poiLayerLoaded = false
 
 	const hidePanels = () => [ workflow, report, page ].forEach( panel => panel.classList.add( "is-hidden" ) )
@@ -167,6 +169,8 @@ export function createApp() {
 	}
 
 	const startWorkflow = mode => {
+		activePopup?.remove()
+		clearBrandMode()
 		activeWorkflow = mode
 		const copy = workflows[ mode ]
 		hidePanels()
@@ -186,6 +190,7 @@ export function createApp() {
 	const showExplore = async() => {
 		hidePanels()
 		clearSelection()
+		clearBrandMode()
 		setActiveNav( "explore" )
 		if( map ) {
 			if( !poiLayerLoaded ) {
@@ -205,6 +210,8 @@ export function createApp() {
 	}
 
 	const showPage = view => {
+		activePopup?.remove()
+		clearBrandMode()
 		const data = pageData[ view ]
 		hidePanels()
 		page.classList.remove( "is-hidden" )
@@ -227,7 +234,14 @@ export function createApp() {
 	}
 
 	const setPoiLayerVisibility = visibility => {
-		[ "fast-food-heatmap", "fast-food-point-glow", "fast-food-points", "fast-food-selected-glow", "fast-food-selected-point" ].forEach( layerId => {
+		[ "fast-food-heatmap", "fast-food-point-glow", "fast-food-points" ].forEach( layerId => {
+			if( map.getLayer( layerId ) ) {
+				map.setLayoutProperty( layerId, "visibility", visibility )
+			}
+		} )
+	}
+	const setBrandLayerVisibility = visibility => {
+		[ "fast-food-brand-glow", "fast-food-brand-points" ].forEach( layerId => {
 			if( map.getLayer( layerId ) ) {
 				map.setLayoutProperty( layerId, "visibility", visibility )
 			}
@@ -241,6 +255,35 @@ export function createApp() {
 			map.setFeatureState( { source: "fast-food-poi", id: activePoiId }, { selected: false } )
 		}
 		activePoiId = null
+	}
+
+	const clearBrandMode = () => {
+		brandFilter.classList.add( "is-hidden" )
+		if( poiLayerLoaded ) {
+			setBrandLayerVisibility( "none" )
+			setPoiLayerVisibility( "visible" )
+		}
+	}
+
+	const showBrandMode = ( brandId, brandName ) => {
+		const brandFeatures = poiFeatures.filter( feature => feature.properties.brandId === brandId )
+		if( brandFeatures.length < 2 ) {
+			return
+		}
+		const filter = [ "==", [ "get", "brandId" ], brandId ]
+		const brandLayerIds = [ "fast-food-brand-glow", "fast-food-brand-points" ]
+		brandLayerIds.forEach( layerId => map.setFilter( layerId, filter ) )
+		setPoiLayerVisibility( "none" )
+		setBrandLayerVisibility( "visible" )
+		get( "#brand-filter-name" ).textContent = brandName
+		get( "#brand-filter-count" ).textContent = `${ brandFeatures.length } ta filial`
+		brandFilter.classList.remove( "is-hidden" )
+		const longitudes = brandFeatures.map( feature => feature.geometry.coordinates[ 0 ] )
+		const latitudes = brandFeatures.map( feature => feature.geometry.coordinates[ 1 ] )
+		map.fitBounds( [
+			[ Math.min( ...longitudes ), Math.min( ...latitudes ) ],
+			[ Math.max( ...longitudes ), Math.max( ...latitudes ) ],
+		], { padding: { top: 100, right: 90, bottom: 90, left: 90 }, maxZoom: 14, duration: 1000 } )
 	}
 
 	const createPoiPopup = ( properties, coordinates ) => {
@@ -261,6 +304,8 @@ export function createApp() {
 		const meta = document.createElement( "div" )
 		const coordinate = document.createElement( "p" )
 		const analyzeButton = document.createElement( "button" )
+		const brandFeatures = properties.brandId ? poiFeatures.filter( feature => feature.properties.brandId === properties.brandId ) : []
+		const brandButton = brandFeatures.length > 1 ? document.createElement( "button" ) : null
 		header.className = "poi-popup__header"
 		label.className = "poi-popup__label"
 		name.className = "poi-popup__name"
@@ -276,6 +321,11 @@ export function createApp() {
 		analyzeButton.textContent = "Shu lokatsiyani tahlil qilish"
 		header.append( label, details )
 		content.append( header, name, meta, coordinate, analyzeButton )
+		if( brandButton ) {
+			brandButton.className = "poi-popup__brand-action"
+			brandButton.textContent = `Barcha ${ properties.brandName || cleanName( properties.name ) } filiallari · ${ brandFeatures.length }`
+			content.append( brandButton )
+		}
 
 		activePopup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: true, offset: 18, maxWidth: "340px", className: "poi-popup" } )
 			.setLngLat( coordinates )
@@ -293,6 +343,10 @@ export function createApp() {
 			startWorkflow( "analyze" )
 			selectLocation( { lng: coordinates[ 0 ], lat: coordinates[ 1 ] } )
 		} )
+		brandButton?.addEventListener( "click", () => {
+			activePopup.remove()
+			showBrandMode( properties.brandId, properties.brandName || cleanName( properties.name ) )
+		} )
 	}
 
 	const closeSearch = () => {
@@ -304,6 +358,7 @@ export function createApp() {
 	const selectSearchResult = feature => {
 		const coordinates = feature.geometry.coordinates
 		closeSearch()
+		clearBrandMode()
 		searchInput.value = cleanName( feature.properties.name )
 		hidePanels()
 		clearSelection()
@@ -325,7 +380,7 @@ export function createApp() {
 			.map( feature => {
 				const properties = feature.properties
 				const name = normalizeSearch( properties.name )
-				const brand = normalizeSearch( properties.brand )
+				const brand = normalizeSearch( `${ properties.brandName || "" } ${ properties.brand || "" }` )
 				const address = normalizeSearch( properties.address )
 				const subtype = normalizeSearch( properties.subtype )
 				const aliases = normalizeSearch( Array.isArray( properties.aliases ) ? properties.aliases.join( " " ) : properties.aliases )
@@ -440,6 +495,32 @@ export function createApp() {
 				},
 			} )
 			map.addLayer( {
+				id: "fast-food-brand-glow",
+				type: "circle",
+				source: "fast-food-poi",
+				layout: { visibility: "none" },
+				paint: {
+					"circle-color": "#38bdf8",
+					"circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 10, 14, 20 ],
+					"circle-blur": 0.76,
+					"circle-opacity": 0.65,
+					"circle-emissive-strength": 2.8,
+				},
+			} )
+			map.addLayer( {
+				id: "fast-food-brand-points",
+				type: "circle",
+				source: "fast-food-poi",
+				layout: { visibility: "none" },
+				paint: {
+					"circle-color": "#e7f8ff",
+					"circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 5, 14, 9 ],
+					"circle-stroke-color": "#168cff",
+					"circle-stroke-width": 3,
+					"circle-emissive-strength": 2.2,
+				},
+			} )
+			map.addLayer( {
 				id: "fast-food-selected-glow",
 				type: "circle",
 				source: "fast-food-poi",
@@ -466,13 +547,16 @@ export function createApp() {
 				},
 			} )
 
-			map.on( "click", "fast-food-points", event => {
+			const handlePoiClick = event => {
 				const properties = event.features[ 0 ].properties
 				const coordinates = [ ...event.features[ 0 ].geometry.coordinates ]
 				createPoiPopup( properties, coordinates )
+			}
+			[ "fast-food-points", "fast-food-brand-points" ].forEach( layerId => {
+				map.on( "click", layerId, handlePoiClick )
+				map.on( "mouseenter", layerId, () => map.getCanvas().style.cursor = "pointer" )
+				map.on( "mouseleave", layerId, () => map.getCanvas().style.cursor = "default" )
 			} )
-			map.on( "mouseenter", "fast-food-points", () => map.getCanvas().style.cursor = "pointer" )
-			map.on( "mouseleave", "fast-food-points", () => map.getCanvas().style.cursor = "default" )
 			poiLayerLoaded = true
 			setPoiLayerVisibility( "visible" )
 		}
@@ -550,6 +634,7 @@ export function createApp() {
 	get( ".close-button" ).addEventListener( "click", showExplore )
 	get( ".close-report" ).addEventListener( "click", showExplore )
 	get( ".close-page" ).addEventListener( "click", showExplore )
+	brandFilter.querySelector( "button" ).addEventListener( "click", clearBrandMode )
 
 	root.querySelectorAll( "[data-control='radius'] button" ).forEach( button => button.addEventListener( "click", () => {
 		radius = Number( button.dataset.value )

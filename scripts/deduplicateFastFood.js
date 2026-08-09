@@ -23,17 +23,18 @@ const genericNames = new Set( [
 ] )
 
 const brands = [
-	{ id: "bellissimo", patterns: [ "bellissimo" ] },
-	{ id: "black-star-burger", patterns: [ "black star burger" ] },
-	{ id: "chopar", patterns: [ "chopar" ] },
-	{ id: "dodo-pizza", patterns: [ "dodo pizza" ] },
-	{ id: "evos", patterns: [ "evos" ] },
-	{ id: "feed-up", patterns: [ "feed up", "feedup" ] },
-	{ id: "kfc", patterns: [ "kfc" ] },
-	{ id: "les-ailes", patterns: [ "les ailes" ] },
-	{ id: "max-way", patterns: [ "max way", "maxway" ] },
-	{ id: "oqtepa-lavash", patterns: [ "oqtepa lavash", "oq tepa lavash" ] },
+	{ id: "bellissimo", name: "Bellissimo Pizza", patterns: [ "bellissimo" ] },
+	{ id: "black-star-burger", name: "Black Star Burger", patterns: [ "black star burger" ] },
+	{ id: "chopar", name: "Chopar Pizza", patterns: [ "chopar" ] },
+	{ id: "dodo-pizza", name: "Dodo Pizza", patterns: [ "dodo pizza" ] },
+	{ id: "evos", name: "EVOS", patterns: [ "evos" ] },
+	{ id: "feed-up", name: "Feed Up", patterns: [ "feed up", "feedup" ] },
+	{ id: "kfc", name: "KFC", patterns: [ "kfc" ] },
+	{ id: "les-ailes", name: "Les Ailes", patterns: [ "les ailes" ] },
+	{ id: "max-way", name: "Max Way", patterns: [ "max way", "maxway" ] },
+	{ id: "oqtepa-lavash", name: "Oqtepa Lavash", patterns: [ "oqtepa lavash", "oq tepa lavash" ] },
 ]
+const brandsById = new Map( brands.map( brand => [ brand.id, brand ] ) )
 
 const transliteration = {
 	а: "a", б: "b", в: "v", г: "g", д: "d", е: "e", ё: "yo", ж: "zh", з: "z", и: "i", й: "y",
@@ -54,7 +55,7 @@ const normalizeName = value => String( value ?? "" )
 
 const detectBrand = normalizedName => brands.find( brand =>
 	brand.patterns.some( pattern => normalizedName.includes( pattern ) )
-)?.id ?? null
+) ?? null
 
 const bigrams = value => {
 	if( value.length < 2 ) {
@@ -113,7 +114,7 @@ const shouldMerge = ( first, second ) => {
 
 	const firstName = first.properties.normalizedName
 	const secondName = second.properties.normalizedName
-	const sameBrand = first.properties.brand && first.properties.brand === second.properties.brand
+	const sameBrand = first.properties.brandId && first.properties.brandId === second.properties.brandId
 	const exactName = firstName === secondName && !genericNames.has( firstName )
 	const similarity = diceSimilarity( firstName, secondName )
 	const veryClose = distance <= 12
@@ -138,14 +139,20 @@ const shouldMerge = ( first, second ) => {
 }
 
 const collection = JSON.parse( await readFile( inputFile, "utf8" ) )
-const features = collection.features.map( feature => ( {
-	...feature,
-	properties: {
-		...feature.properties,
-		normalizedName: normalizeName( feature.properties.name ),
-		brand: detectBrand( normalizeName( feature.properties.name ) ),
-	},
-} ) )
+const features = collection.features.map( feature => {
+	const normalizedName = normalizeName( feature.properties.name )
+	const brand = detectBrand( normalizedName )
+	return {
+		...feature,
+		properties: {
+			...feature.properties,
+			normalizedName,
+			brand: brand?.id ?? null,
+			brandId: brand?.id ?? null,
+			brandName: brand?.name ?? null,
+		},
+	}
+} )
 
 const parent = features.map( ( _, index ) => index )
 const find = index => {
@@ -231,6 +238,8 @@ const mergeGroup = group => {
 		.slice( 0, 16 )
 	const sourceConfidence = Math.max( ...group.map( feature => feature.properties.confidence ?? 0 ) )
 	const confidence = Math.min( 0.98, 0.54 + ( sources.length - 1 ) * 0.2 + ( primary.properties.name === "Nomsiz fast food" ? 0 : 0.08 ) + sourceConfidence * 0.12 )
+	const brandId = group.map( feature => feature.properties.brandId ).find( Boolean ) ?? null
+	const brandName = brandId ? brandsById.get( brandId )?.name ?? null : null
 
 	return {
 		type: "Feature",
@@ -239,7 +248,9 @@ const mergeGroup = group => {
 			id: `poi_${ id }`,
 			name: primary.properties.name,
 			aliases,
-			brand: primary.properties.brand,
+			brand: brandId,
+			brandId,
+			brandName,
 			subtype: subtypes.length === 1 ? subtypes[ 0 ] : primary.properties.subtype,
 			subtypes,
 			sources,
