@@ -5,3 +5,4 @@ node_modules
 public/poi/
 data/poi-inventory.json
 data/fast-food-normalized.geojson
+data/fast-food-deduplication-audit.json

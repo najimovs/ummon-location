@@ -11,7 +11,9 @@
 		"lint:fix": "eslint . --fix",
 		"poi:analyze": "node scripts/analyzePoi.js",
 		"poi:audit-fast-food": "node scripts/auditFastFoodCategories.js",
-		"poi:normalize-fast-food": "node scripts/buildNormalizedFastFood.js"
+		"poi:normalize-fast-food": "node scripts/buildNormalizedFastFood.js",
+		"poi:deduplicate-fast-food": "node scripts/deduplicateFastFood.js",
+		"poi:build-fast-food": "pnpm poi:normalize-fast-food && pnpm poi:deduplicate-fast-food"
 	},
 	"devDependencies": {
 		"vite": "^8.2.0",
