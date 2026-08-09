@@ -46,6 +46,7 @@ const defaultLayerSettings = {
 	fastFoodPoints: true,
 	fastFoodHeatmap: true,
 	metro: true,
+	demandGenerators: false,
 	serviceAreas: true,
 	districts: true,
 	opportunityMap: true,
@@ -98,6 +99,7 @@ export function createApp() {
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="fastFoodPoints"><span><i class="layer-dot is-poi"></i><em>Fast-food nuqtalari<small>Restoran va tarmoq manzillari</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="fastFoodHeatmap"><span><i class="layer-dot is-heatmap"></i><em>Zichlik heatmap’i<small>Fast-food klasterlari</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="metro"><span><i class="layer-dot is-metro"></i><em>Metro bekatlari<small>Bekatlar va kirish nuqtalari</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="demandGenerators"><span><i class="layer-dot is-demand"></i><em>Talab generatorlari<small>Ta’lim, ofis, savdo va boshqa oqimlar</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="serviceAreas"><span><i class="layer-dot is-area"></i><em>Xizmat hududlari<small>Joy tahlilidan keyin ochiladi</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="districts"><span><i class="layer-dot is-district"></i><em>Tumanlar<small>Chegara va tuman nomlari</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="opportunityMap"><span><i class="layer-dot is-h3"></i><em>Imkoniyat xaritasi<small>“Joy topish” natijasidan keyin ochiladi</small></em></span><i></i></button>
@@ -369,6 +371,7 @@ export function createApp() {
 		setLayerVisibility( [ "fast-food-heatmap" ], layerSettings.fastFoodHeatmap )
 		setLayerVisibility( [ "fast-food-point-glow", "fast-food-points" ], layerSettings.fastFoodPoints )
 		setLayerVisibility( [ "metro-analysis-link-glow", "metro-analysis-link", "metro-station-glow", "metro-stations", "metro-station-labels", "metro-entrances" ], layerSettings.metro )
+		setLayerVisibility( [ "demand-clusters-glow", "demand-clusters", "demand-cluster-count", "demand-points" ], layerSettings.demandGenerators )
 		setLayerVisibility( [ "voronoi-analysis-fill", "voronoi-analysis-glow", "voronoi-analysis-line", "voronoi-site-glow", "voronoi-site-points" ], layerSettings.serviceAreas )
 		setLayerVisibility( [ "district-fill", "district-line-glow", "district-line", "district-selected" ], layerSettings.districts )
 		setLayerVisibility( [ "district-labels" ], layerSettings.districts && opportunityFeatures.length === 0 )
@@ -1087,6 +1090,36 @@ export function createApp() {
 		activePopup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: true, offset: 16, maxWidth: "320px", className: "metro-popup" } )
 			.setLngLat( coordinates ).setDOMContent( content ).addTo( map )
 	}
+	const showDemandPopup = ( feature, coordinates ) => {
+		activePopup?.remove()
+		const properties = feature.properties
+		const content = document.createElement( "div" )
+		const eyebrow = document.createElement( "span" )
+		const name = document.createElement( "strong" )
+		const description = document.createElement( "p" )
+		const score = document.createElement( "small" )
+		content.className = "demand-popup__content"
+		eyebrow.textContent = `${ properties.categoryLabel } · TALAB GENERATORI`
+		name.textContent = properties.name
+		description.textContent = `Asosiy auditoriya: ${ { students: "talabalar va o‘quvchilar", shoppers: "xaridorlar", commuters: "yo‘lovchilar", workers: "xodimlar", visitors: "tashrif buyuruvchilar", travelers: "sayohatchilar" }[ properties.audience ] || "tashrif buyuruvchilar" }.`
+		score.textContent = `Boshlang‘ich ta’sir koeffitsiyenti: ${ Math.round( Number( properties.weight ) * 100 ) }/100`
+		content.append( eyebrow, name, description, score )
+		activePopup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: true, offset: 16, maxWidth: "320px", className: "demand-popup" } )
+			.setLngLat( coordinates ).setDOMContent( content ).addTo( map )
+	}
+	const loadDemandLayer = async() => {
+		try {
+			const response = await fetch( "/data/demand-generators.geojson" )
+			if( !response.ok ) {
+				throw new Error( `Demand generator data request failed: ${ response.status }` )
+			}
+			map.getSource( "demand-generators" ).setData( await response.json() )
+			applyCustomLayerSettings()
+		}
+		catch( error ) {
+			console.error( error )
+		}
+	}
 
 	const loadMetroLayer = async() => {
 		try {
@@ -1276,6 +1309,7 @@ export function createApp() {
 		map.addSource( "metro-stations", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "metro-entrances", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "metro-analysis-link", { type: "geojson", data: featureCollection( [] ) } )
+		map.addSource( "demand-generators", { type: "geojson", data: featureCollection( [] ), promoteId: "id", cluster: true, clusterMaxZoom: 14, clusterRadius: 42 } )
 		map.addSource( "h3-opportunity", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "location-candidates", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "selection-radius", { type: "geojson", data: { type: "FeatureCollection", features: [] } } )
@@ -1298,6 +1332,10 @@ export function createApp() {
 		map.addLayer( { id: "selection-radius-line", type: "line", source: "selection-radius", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#bcecff", "line-width": 3.5, "line-dasharray": [ 2, 1.6 ], "line-opacity": 1, "line-emissive-strength": 2.2 } } )
 		map.addLayer( { id: "location-candidate-glow", type: "circle", source: "location-candidates", paint: { "circle-color": "#36c7ff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 18, 15, 28 ], "circle-blur": 0.72, "circle-opacity": 0.72, "circle-emissive-strength": 3 } } )
 		map.addLayer( { id: "location-candidates", type: "circle", source: "location-candidates", paint: { "circle-color": [ "interpolate", [ "linear" ], [ "get", "score" ], 50, "#4f85bd", 75, "#42c3ff", 95, "#e8fbff" ], "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 7, 15, 11 ], "circle-stroke-color": "#071525", "circle-stroke-width": 3, "circle-emissive-strength": 2.5 } } )
+		map.addLayer( { id: "demand-clusters-glow", type: "circle", source: "demand-generators", filter: [ "has", "point_count" ], paint: { "circle-color": "#8a75ff", "circle-radius": [ "step", [ "get", "point_count" ], 18, 50, 25, 250, 34 ], "circle-blur": 0.72, "circle-opacity": 0.66, "circle-emissive-strength": 2.7 } } )
+		map.addLayer( { id: "demand-clusters", type: "circle", source: "demand-generators", filter: [ "has", "point_count" ], paint: { "circle-color": [ "step", [ "get", "point_count" ], "#4b64bd", 50, "#6759d4", 250, "#845ee8" ], "circle-radius": [ "step", [ "get", "point_count" ], 12, 50, 17, 250, 23 ], "circle-stroke-color": "#d9d4ff", "circle-stroke-width": 1.5, "circle-emissive-strength": 2 } } )
+		map.addLayer( { id: "demand-cluster-count", type: "symbol", source: "demand-generators", filter: [ "has", "point_count" ], layout: { "text-field": [ "get", "point_count_abbreviated" ], "text-size": 10 }, paint: { "text-color": "#ffffff", "text-halo-color": "rgba(24, 17, 55, .7)", "text-halo-width": 1, "text-emissive-strength": 1.6 } } )
+		map.addLayer( { id: "demand-points", type: "circle", source: "demand-generators", filter: [ "!", [ "has", "point_count" ] ], paint: { "circle-color": [ "match", [ "get", "category" ], "education", "#9b7cff", "office", "#4f9cff", "retail", "#ff6fb5", "transport", "#55e4ff", "healthcare", "#52d99a", "leisure", "#ffad5c", "hotel", "#d7c3ff", "#8ea5bd" ], "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 11, 4, 16, 7 ], "circle-stroke-color": "#f4f8ff", "circle-stroke-width": 1.2, "circle-opacity": 0.92, "circle-emissive-strength": 2.2 } } )
 		map.addLayer( { id: "metro-analysis-link-glow", type: "line", source: "metro-analysis-link", paint: { "line-color": "#52dcff", "line-width": 10, "line-blur": 7, "line-opacity": 0.55, "line-emissive-strength": 2.8 } } )
 		map.addLayer( { id: "metro-analysis-link", type: "line", source: "metro-analysis-link", layout: { "line-cap": "round" }, paint: { "line-color": "#c4f6ff", "line-width": 2.5, "line-dasharray": [ 2, 1.5 ], "line-opacity": 0.95, "line-emissive-strength": 2.2 } } )
 		map.addLayer( { id: "metro-station-glow", type: "circle", source: "metro-stations", minzoom: 9, paint: { "circle-color": "#50d7ff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 10, 13, 16, 16, 22 ], "circle-blur": 0.72, "circle-opacity": 0.8, "circle-emissive-strength": 3 } } )
@@ -1338,12 +1376,14 @@ export function createApp() {
 		} )
 		map.on( "click", "metro-stations", event => showMetroPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
 		map.on( "click", "metro-entrances", event => showMetroPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
+		map.on( "click", "demand-points", event => showDemandPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
+		map.on( "click", "demand-clusters", event => map.easeTo( { center: event.features[ 0 ].geometry.coordinates, zoom: Math.min( 16, map.getZoom() + 2 ), duration: 500 } ) )
 		map.on( "click", "h3-opportunity-fill", event => {
 			if( map.queryRenderedFeatures( event.point, { layers: [ "location-candidates" ] } ).length === 0 ) {
 				showH3Popup( event.features[ 0 ], event.lngLat )
 			}
 		} )
-		;[ "district-fill", "h3-opportunity-fill", "location-candidates", "metro-stations", "metro-entrances" ].forEach( layerId => {
+		;[ "district-fill", "h3-opportunity-fill", "location-candidates", "metro-stations", "metro-entrances", "demand-points", "demand-clusters" ].forEach( layerId => {
 			map.on( "mouseenter", layerId, () => map.getCanvas().style.cursor = "pointer" )
 			map.on( "mouseleave", layerId, () => map.getCanvas().style.cursor = "default" )
 		} )
@@ -1366,6 +1406,7 @@ export function createApp() {
 		applyCustomLayerSettings()
 		loadBoundaryData()
 		loadMetroLayer()
+		loadDemandLayer()
 		loadPoiLayer()
 	} )
 

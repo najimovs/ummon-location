@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-08-09T19:11:35.304Z",
+  "featureCount": 8397,
+  "normalizedCount": 10271,
+  "removedDuplicates": 1874,
+  "countsByCategory": {
+    "education": 2398,
+    "retail": 892,
+    "transport": 295,
+    "office": 2177,
+    "healthcare": 1014,
+    "leisure": 785,
+    "hotel": 836
+  },
+  "sourceSummary": {
+    "poi-fsq-point.geojson": 4520,
+    "poi-osm-point.geojson": 1438,
+    "poi-osm-polygon.geojson": 1168,
+    "poi-overture-point.geojson": 3145
+  }
+}
