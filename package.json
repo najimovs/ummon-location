@@ -8,7 +8,8 @@
 		"build": "vite build",
 		"preview": "vite preview",
 		"lint": "eslint .",
-		"lint:fix": "eslint . --fix"
+		"lint:fix": "eslint . --fix",
+		"poi:analyze": "node scripts/analyzePoi.js"
 	},
 	"devDependencies": {
 		"vite": "^8.2.0",
