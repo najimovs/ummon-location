@@ -8,11 +8,13 @@ import {
 	LocateFixed,
 	MapPin,
 	Search,
+	Sparkles,
 	X,
 	createIcons,
 } from "lucide"
 import { cellToBoundary, cellToLatLng, polygonToCells } from "h3-js"
 import { area, bbox, booleanPointInPolygon, circle, featureCollection, intersect, point, pointToLineDistance, voronoi } from "@turf/turf"
+import { createComparisonAdvice, createLocationAdvice } from "../analysis/locationAdvisor.js"
 
 const workflows = {
 	analyze: {
@@ -144,6 +146,7 @@ export function createApp() {
 
 			<section class="report-panel is-hidden" data-panel="report">
 				<div class="report-head"><div><span class="eyebrow">REAL GEO ANALYTICS</span><h2 id="report-title">Raqobat tahlili</h2><small id="report-location">Tanlangan lokatsiya</small></div><button class="close-report" type="button"><i data-lucide="x"></i></button></div>
+				<section class="ai-advisor"><header><span><i data-lucide="sparkles"></i> AI LOCATION ADVISOR</span><b id="ai-confidence">—</b></header><strong id="ai-verdict">Tahlil kutilmoqda</strong><p id="ai-format">Mos biznes formati aniqlanadi</p><div><article><small>KUCHLI TOMONLAR</small><ul id="ai-strengths"><li>Geo signallar hisoblanmoqda</li></ul></article><article><small>XAVFLAR</small><ul id="ai-risks"><li>Ma’lumot kutilmoqda</li></ul></article></div><footer><small>KEYINGI QADAM</small><p id="ai-action">Tahlildan keyin amaliy tavsiya chiqadi.</p></footer></section>
 				<div class="district-context analysis-only"><span>TUMAN KONTEKSTI</span><strong id="analysis-district">Aniqlanmoqda…</strong><div><p><small>Aholi</small><b id="district-population">—</b></p><p><small>Fast-food</small><b id="district-pois">—</b></p><p><small>10 000 aholiga</small><b id="district-per-capita">—</b></p><p><small>Taqqoslash</small><b id="district-comparison">—</b></p></div></div>
 				<div class="score-block analysis-only"><div class="score-ring"><strong id="competition-score">—</strong><small>/100</small></div><div><span>RAQOBAT BOSIMI</span><strong id="competition-level">Hisoblanmoqda</strong><p id="competition-summary">Radius ichidagi fast-food nuqtalari asosida.</p></div></div>
 				<div class="metric-grid analysis-only"><article><span>Raqobatchilar</span><strong id="competitor-count">—</strong></article><article><span>Tarmoq brendlari</span><strong id="brand-count">—</strong></article><article><span>Eng yaqin raqib</span><strong id="nearest-distance">—</strong></article><article><span>Yetakchi brend</span><strong id="dominant-brand">—</strong></article></div>
@@ -164,7 +167,7 @@ export function createApp() {
 			</section>
 			<section class="comparison-panel is-hidden" data-panel="comparison">
 				<div class="comparison-head"><div><span class="eyebrow">A / B TAQQOSLASH</span><h2>Qaysi lokatsiya kuchliroq?</h2><small id="comparison-radius">Bir xil radiusdagi signallar</small></div><button class="close-comparison" type="button"><i data-lucide="x"></i></button></div>
-				<div class="comparison-verdict"><span>TAVSIYA</span><strong id="comparison-winner">Hisoblanmoqda…</strong><p id="comparison-summary">Ikki lokatsiyaning biznes signallari solishtirilmoqda.</p></div>
+				<div class="comparison-verdict"><span><i data-lucide="sparkles"></i> AI TAVSIYASI</span><b id="comparison-ai-confidence">—</b><strong id="comparison-winner">Hisoblanmoqda…</strong><p id="comparison-summary">Ikki lokatsiyaning biznes signallari solishtirilmoqda.</p><small id="comparison-ai-risk">Asosiy xavf aniqlanadi.</small></div>
 				<div class="comparison-columns"><article class="is-a"><header><span>A</span><div><small>BIRINCHI JOY</small><strong id="comparison-a-coordinate">—</strong></div><b id="comparison-a-score">—</b></header></article><article class="is-b"><header><span>B</span><div><small>IKKINCHI JOY</small><strong id="comparison-b-coordinate">—</strong></div><b id="comparison-b-score">—</b></header></article></div>
 				<div class="comparison-metrics" id="comparison-metrics"></div>
 				<p class="comparison-note">Umumiy ball: 40% raqobat imkoniyati, 20% talab, 15% metro, 15% avtobus va 10% yo‘l signali. Past raqobat bosimi afzal hisoblanadi.</p>
@@ -180,7 +183,7 @@ export function createApp() {
 	` )
 
 	createIcons( {
-		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, FileText, Layers3, LocateFixed, MapPin, Search, X },
+		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, FileText, Layers3, LocateFixed, MapPin, Search, Sparkles, X },
 		attrs: { "stroke-width": 1.8 },
 	} )
 
@@ -618,6 +621,24 @@ export function createApp() {
 
 	const cleanName = value => String( value || "Nomsiz fast food" ).replace( /^"+|"+$/g, "" )
 	const formatNumber = value => new Intl.NumberFormat( "uz-UZ" ).format( Math.round( Number( value ) || 0 ) )
+	const renderAiAdvice = advice => {
+		const advisor = get( ".ai-advisor" )
+		advisor.dataset.tone = advice.tone
+		get( "#ai-confidence" ).textContent = `${ advice.confidence }% ishonch`
+		get( "#ai-verdict" ).textContent = advice.verdict
+		get( "#ai-format" ).textContent = `Mos format: ${ advice.format } · AI ball ${ advice.score }/100`
+		get( "#ai-strengths" ).replaceChildren( ...advice.strengths.map( strength => {
+			const item = document.createElement( "li" )
+			item.textContent = strength
+			return item
+		} ) )
+		get( "#ai-risks" ).replaceChildren( ...advice.risks.map( risk => {
+			const item = document.createElement( "li" )
+			item.textContent = risk
+			return item
+		} ) )
+		get( "#ai-action" ).textContent = advice.action
+	}
 	const getDistrictAt = lngLat => {
 		const cursor = point( [ lngLat.lng, lngLat.lat ] )
 		return districtFeatures.find( feature => booleanPointInPolygon( cursor, feature ) ) ?? null
@@ -828,24 +849,21 @@ export function createApp() {
 	}
 	const renderComparison = () => {
 		const snapshots = { a: getComparisonSnapshot( comparePoints.a ), b: getComparisonSnapshot( comparePoints.b ) }
-		const winner = snapshots.a.overallScore === snapshots.b.overallScore ? null : snapshots.a.overallScore > snapshots.b.overallScore ? "a" : "b"
-		const loser = winner === "a" ? "b" : "a"
+		const advice = {
+			a: createLocationAdvice( { competition: snapshots.a.pressureScore, demand: snapshots.a.demand.accessScore, metro: snapshots.a.metro.accessScore, transit: snapshots.a.transit.accessScore, road: snapshots.a.road.accessScore, territoryRatio: 1, competitorCount: snapshots.a.competitorCount } ),
+			b: createLocationAdvice( { competition: snapshots.b.pressureScore, demand: snapshots.b.demand.accessScore, metro: snapshots.b.metro.accessScore, transit: snapshots.b.transit.accessScore, road: snapshots.b.road.accessScore, territoryRatio: 1, competitorCount: snapshots.b.competitorCount } ),
+		}
+		const comparisonAdvice = createComparisonAdvice( advice.a, advice.b )
+		const winner = comparisonAdvice.winner?.toLocaleLowerCase( "uz" ) || null
 		get( "#comparison-a-coordinate" ).textContent = `${ comparePoints.a.lat.toFixed( 5 ) }, ${ comparePoints.a.lng.toFixed( 5 ) }`
 		get( "#comparison-b-coordinate" ).textContent = `${ comparePoints.b.lat.toFixed( 5 ) }, ${ comparePoints.b.lng.toFixed( 5 ) }`
 		get( "#comparison-a-score" ).textContent = `${ snapshots.a.overallScore }/100`
 		get( "#comparison-b-score" ).textContent = `${ snapshots.b.overallScore }/100`
 		get( "#comparison-radius" ).textContent = `${ radius / 1000 } km radius · bir xil scoring modeli`
-		get( "#comparison-winner" ).textContent = winner ? `${ winner.toUpperCase() } lokatsiya tavsiya etiladi` : "Ikkala lokatsiya teng"
-		const strengths = winner ? [
-			[ "talab oqimi", snapshots[ winner ].demand.accessScore - snapshots[ loser ].demand.accessScore ],
-			[ "metro qulayligi", snapshots[ winner ].metro.accessScore - snapshots[ loser ].metro.accessScore ],
-			[ "avtobus qulayligi", snapshots[ winner ].transit.accessScore - snapshots[ loser ].transit.accessScore ],
-			[ "yo‘l oqimi", snapshots[ winner ].road.accessScore - snapshots[ loser ].road.accessScore ],
-			[ "pastroq raqobat", snapshots[ loser ].pressureScore - snapshots[ winner ].pressureScore ],
-		].filter( item => item[ 1 ] > 0 ).sort( ( first, second ) => second[ 1 ] - first[ 1 ] ).slice( 0, 2 ).map( item => item[ 0 ] ) : []
-		get( "#comparison-summary" ).textContent = winner
-			? `${ winner.toUpperCase() } joy umumiy hisobda ${ snapshots[ winner ].overallScore - snapshots[ loser ].overallScore } ball oldinda${ strengths.length ? `; asosiy ustunligi: ${ strengths.join( " va " ) }` : "" }.`
-			: "Signallar bo‘yicha umumiy natija teng. Ijara, parking va piyoda kirishini joyida tekshirish hal qiluvchi bo‘ladi."
+		get( "#comparison-winner" ).textContent = comparisonAdvice.verdict
+		get( "#comparison-summary" ).textContent = comparisonAdvice.summary
+		get( "#comparison-ai-confidence" ).textContent = `${ comparisonAdvice.confidence }% ishonch`
+		get( "#comparison-ai-risk" ).textContent = `Asosiy xavf: ${ comparisonAdvice.risk }.`
 		const metrics = [
 			{ label: "Raqobat bosimi", note: "Pastroq yaxshi", value: item => `${ item.pressureScore }/100`, raw: item => item.pressureScore, lower: true },
 			{ label: "Raqobatchilar", note: `${ radius / 1000 } km radius`, value: item => `${ item.competitorCount } ta`, raw: item => item.competitorCount, lower: true },
@@ -866,7 +884,7 @@ export function createApp() {
 		} ).join( "" )
 		comparison.classList.remove( "is-hidden" )
 		map.fitBounds( [ [ Math.min( comparePoints.a.lng, comparePoints.b.lng ), Math.min( comparePoints.a.lat, comparePoints.b.lat ) ], [ Math.max( comparePoints.a.lng, comparePoints.b.lng ), Math.max( comparePoints.a.lat, comparePoints.b.lat ) ] ], { padding: { top: 80, right: window.innerWidth > 800 ? 610 : 40, bottom: 80, left: 80 }, maxZoom: 15, duration: 900 } )
-		return { snapshots, winner }
+		return { snapshots, winner, advice, comparisonAdvice }
 	}
 	const showMetroConnection = ( location, metro ) => {
 		const features = metro.nearest ? [ {
@@ -1068,7 +1086,9 @@ export function createApp() {
 			const districtMetricSelectors = [ "#district-population", "#district-pois", "#district-per-capita", "#district-comparison" ]
 			districtMetricSelectors.forEach( selector => get( selector ).textContent = "—" )
 		}
-		return { pressureScore, pressureLevel, competitorCount: withinRadius.length, brandCount: brandCounts.size, nearest, territory, metro, transit, demand, road, district, poiIds: [ ...withinRadius.map( item => item.feature.properties.id ), ...( selectedPoiId ? [ selectedPoiId ] : [] ) ] }
+		const advice = createLocationAdvice( { competition: pressureScore, demand: demand.accessScore, metro: metro.accessScore, transit: transit.accessScore, road: road.accessScore, territoryRatio: territory.comparison || 1, competitorCount: withinRadius.length } )
+		renderAiAdvice( advice )
+		return { pressureScore, pressureLevel, competitorCount: withinRadius.length, brandCount: brandCounts.size, nearest, territory, metro, transit, demand, road, district, advice, poiIds: [ ...withinRadius.map( item => item.feature.properties.id ), ...( selectedPoiId ? [ selectedPoiId ] : [] ) ] }
 	}
 	const clearActivePoi = () => {
 		if( activePoiId && map?.getSource( "fast-food-poi" ) ) {
@@ -1347,7 +1367,10 @@ export function createApp() {
 			list.append( button )
 		} )
 		map.fitBounds( bbox( district ), { padding: { top: 70, right: window.innerWidth > 800 ? 560 : 35, bottom: 70, left: 70 }, duration: 900 } )
-		return { district, candidates: candidateFeatures }
+		const topCandidate = candidateFeatures[ 0 ]
+		const advice = topCandidate ? createLocationAdvice( { competition: Math.min( 100, topCandidate.properties.nearby * 7 ), demand: topCandidate.properties.demandScore, metro: topCandidate.properties.metroScore, transit: topCandidate.properties.transitScore, road: topCandidate.properties.roadScore, territoryRatio: 1, competitorCount: topCandidate.properties.nearby } ) : createLocationAdvice( {} )
+		renderAiAdvice( advice )
+		return { district, candidates: candidateFeatures, advice }
 	}
 
 	const clearBrandMode = () => {
@@ -2070,7 +2093,7 @@ export function createApp() {
 				summary: get( "#comparison-summary" ).textContent,
 				location: `A: ${ comparePoints.a.lat.toFixed( 5 )}, ${ comparePoints.a.lng.toFixed( 5 ) } · B: ${ comparePoints.b.lat.toFixed( 5 )}, ${ comparePoints.b.lng.toFixed( 5 ) }`,
 				radius,
-				metrics: [ { label: "A ball", value: `${ result.snapshots.a.overallScore }/100` }, { label: "B ball", value: `${ result.snapshots.b.overallScore }/100` }, { label: "G‘olib", value: winnerLabel } ],
+				metrics: [ { label: "A AI ball", value: `${ result.advice.a.score }/100` }, { label: "B AI ball", value: `${ result.advice.b.score }/100` }, { label: "AI ishonchi", value: `${ result.comparisonAdvice.confidence }%` } ],
 			} )
 			return
 		}
@@ -2089,9 +2112,9 @@ export function createApp() {
 			const topCandidate = result.candidates[ 0 ]
 			setPendingReport( {
 				type: "find", typeLabel: "Joy topish", title: `${ district.properties.name } uchun ${ result.candidates.length } ta joy`,
-				summary: topCandidate ? `Eng kuchli lokatsiya ${ topCandidate.properties.score } ball oldi. Tuman bo‘yicha barcha kichik hududlar solishtirildi.` : "Mos lokatsiya topilmadi.",
+				summary: topCandidate ? `${ result.advice.verdict }. ${ result.advice.action }` : "Mos lokatsiya topilmadi.",
 				location: `${ district.properties.name } tumani`, radius,
-				metrics: [ { label: "Eng yuqori ball", value: topCandidate ? `${ topCandidate.properties.score }/100` : "—" }, { label: "Tavsiyalar", value: `${ result.candidates.length } ta` }, { label: "Aholi", value: formatNumber( district.properties.population ) } ],
+				metrics: [ { label: "AI ball", value: topCandidate ? `${ result.advice.score }/100` : "—" }, { label: "Mos format", value: topCandidate ? result.advice.format : "—" }, { label: "Tavsiyalar", value: `${ result.candidates.length } ta` } ],
 			} )
 		}
 		else {
@@ -2105,9 +2128,9 @@ export function createApp() {
 			get( "#report-location" ).textContent = `${ selectedPoint.lat.toFixed( 5 ) }, ${ selectedPoint.lng.toFixed( 5 ) } · ${ radius / 1000 } km`
 			setPendingReport( {
 				type: "analyze", typeLabel: "Lokatsiya tahlili", title: result.district ? `${ result.district.properties.name }dagi lokatsiya` : "Tanlangan lokatsiya",
-				summary: `${ radius / 1000 } km radiusda ${ result.competitorCount } ta raqobatchi. Raqobat bosimi ${ result.pressureLevel.toLocaleLowerCase( "uz" ) }.`,
+				summary: `${ result.advice.verdict }. ${ result.advice.action }`,
 				location: `${ selectedPoint.lat.toFixed( 5 ) }, ${ selectedPoint.lng.toFixed( 5 ) }`, radius,
-				metrics: [ { label: "Raqobat", value: `${ result.pressureScore }/100` }, { label: "Talab", value: `${ result.demand.accessScore }/100` }, { label: "Xizmat hududi", value: formatArea( result.territory.candidateArea ) } ],
+				metrics: [ { label: "AI ball", value: `${ result.advice.score }/100` }, { label: "Mos format", value: result.advice.format }, { label: "AI ishonchi", value: `${ result.advice.confidence }%` } ],
 			} )
 		}
 	} )
