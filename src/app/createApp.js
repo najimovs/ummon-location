@@ -101,7 +101,7 @@ export function createApp() {
 
 	root.insertAdjacentHTML( "beforeend", `
 		<header class="topbar">
-			<a class="brand" href="#" aria-label="Ummon Location"><span class="brand-mark"><img src="/logo.png" alt=""></span><span><strong>Ummon</strong><small>Location Intelligence</small></span></a>
+			<nav class="top-nav" aria-label="Asosiy vositalar">${ navigation }</nav>
 			<div class="map-search"><span><i data-lucide="search"></i></span><input type="search" placeholder="Fast food yoki manzilni qidiring" aria-label="Fast food qidirish" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-results"><kbd>⌘ K</kbd><div class="search-results" id="search-results" role="listbox" hidden></div></div>
 			<div class="layer-control">
 				<button class="layers-toggle" type="button" aria-expanded="false" aria-controls="layers-panel"><i data-lucide="layers-3"></i><span>Qatlamlar</span></button>
@@ -130,14 +130,10 @@ export function createApp() {
 			</div>
 		</header>
 
-		<aside class="sidebar">
-			<span class="nav-label">Workspace</span>
-			<nav>${ navigation }</nav>
-		</aside>
-
 		<main class="map-workspace">
+			<div class="map-brand" aria-label="Ummon Location"><span><img src="/logo.png" alt=""></span><div><strong>Ummon</strong><small>Location Intelligence</small></div></div>
 			<section class="workflow-panel is-hidden" data-panel="workflow">
-				<div class="panel-top"><button class="back-button" type="button"><i data-lucide="arrow-left"></i></button><div><span class="eyebrow">YANGI TAHLIL</span><h2 id="workflow-title">Lokatsiyani belgilang</h2></div><button class="close-button" type="button"><i data-lucide="x"></i></button></div>
+				<div class="panel-top"><div><span class="eyebrow">YANGI TAHLIL</span><h2 id="workflow-title">Lokatsiyani belgilang</h2></div><button class="close-button" type="button"><i data-lucide="x"></i></button></div>
 				<p id="workflow-description">Xaritadan fast food ochmoqchi bo‘lgan aniq nuqtani tanlang.</p>
 				<div class="step"><span>1</span><div><small>NUQTA</small><strong id="selected-location">Xaritani bosing</strong></div></div>
 				<div class="compare-picker is-hidden"><button type="button" data-compare-slot="a"><span>A</span><div><small>BIRINCHI JOY</small><strong id="compare-location-a">Xaritadan tanlang</strong></div></button><button type="button" data-compare-slot="b"><span>B</span><div><small>IKKINCHI JOY</small><strong id="compare-location-b">Xaritadan tanlang</strong></div></button><p id="compare-picker-help">Avval A lokatsiyani xaritadan belgilang.</p></div>
@@ -179,7 +175,7 @@ export function createApp() {
 			<button class="focus-reset is-hidden" type="button"><i data-lucide="arrow-left"></i><span>Oldingi ko‘rinish</span></button>
 			<div class="brand-filter is-hidden"><span><small>TARMOQ FILTRI</small><strong id="brand-filter-name">EVOS</strong><b id="brand-filter-count">0 ta filial</b></span><button type="button" aria-label="Tarmoq filtrini yopish"><i data-lucide="x"></i></button></div>
 			<div class="territory-legend is-hidden"><header><strong>Xizmat hududi xaritasi</strong><button class="territory-legend-toggle" type="button" aria-label="Xizmat hududi izohini yig‘ish" aria-expanded="true"><i data-lucide="chevron-down"></i></button></header><div class="territory-legend-content"><p><i class="is-candidate"></i><span><b>Yangi lokatsiya</b>Sizning nuqtangiz eng yaqin bo‘lgan hudud</span></p><p><i class="is-competitor"></i><span><b>Raqib hududlari</b>Boshqa fast-food’lar yaqinroq bo‘lgan joylar</span></p><p><i class="is-generator"></i><span><b>Hudud markazi</b>Hududni yaratgan haqiqiy fast-food nuqtasi</span></p><p><i class="is-radius"></i><span><b>Tahlil chegarasi</b>Siz tanlagan radius doirasi</span></p></div></div>
-			<div class="district-legend is-hidden"><strong id="map-score-legend">Joy imkoniyati</strong><p id="map-score-description">Har bir kichik hududda yangi fast-food ochish alohida hisoblangan.</p><i></i><span><small id="map-score-low">Past</small><small id="map-score-high">Yuqori</small></span></div>
+			<div class="district-legend is-hidden"><strong id="map-score-legend">Joy imkoniyati</strong><i></i><span><small id="map-score-low">Past</small><small id="map-score-high">Yuqori</small></span></div>
 		</main>
 	` )
 
@@ -1168,7 +1164,6 @@ export function createApp() {
 			? "Yorqin hududlarda odamlarning tanlangan yangi fast-food’ga borish ehtimoli yuqoriroq."
 			: "Xaritadagi yorqin hududlar yangi fast-food uchun kuchliroq imkoniyatni bildiradi."
 		get( "#map-score-legend" ).textContent = mode === "capture" ? "Yangi joyni tanlash ehtimoli" : "Joy imkoniyati"
-		get( "#map-score-description" ).textContent = mode === "capture" ? "Yorqin hududlarda yangi joy ko‘proq mijoz jalb qilishi mumkin." : "Har bir kichik hududda yangi fast-food ochish alohida hisoblangan."
 		get( "#map-score-low" ).textContent = mode === "capture" ? "Past %" : "Band"
 		get( "#map-score-high" ).textContent = mode === "capture" ? "Yuqori %" : "Imkoniyat"
 	}
@@ -1333,7 +1328,6 @@ export function createApp() {
 		get( "#find-pois" ).textContent = district.properties.poiCount
 		get( "#find-district-summary" ).textContent = `Tuman ${ opportunityFeatures.length } ta kichik hududga bo‘lindi. Mijoz 40%, talab 20%, metro 15%, avtobus 15% va yo‘l 10% vazn bilan hisoblanib, ${ candidateFeatures.length } ta eng kuchli joy ajratildi.`
 		get( "#map-score-legend" ).textContent = "Joy imkoniyati"
-		get( "#map-score-description" ).textContent = "Har bir kichik hududda yangi fast-food ochish alohida hisoblangan."
 		get( "#map-score-low" ).textContent = "Band"
 		get( "#map-score-high" ).textContent = "Imkoniyat"
 		get( "#candidate-impact" ).classList.add( "is-hidden" )
@@ -2003,7 +1997,6 @@ export function createApp() {
 			showPage( button.dataset.view )
 		}
 	} ) )
-	get( ".back-button" ).addEventListener( "click", showMap )
 	get( ".close-button" ).addEventListener( "click", showMap )
 	get( ".close-report" ).addEventListener( "click", showMap )
 	get( ".close-page" ).addEventListener( "click", showMap )
