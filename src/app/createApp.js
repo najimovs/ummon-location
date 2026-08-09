@@ -9,6 +9,8 @@ import {
 	MapPin,
 	Search,
 	Sparkles,
+	ThumbsDown,
+	ThumbsUp,
 	X,
 	createIcons,
 } from "lucide"
@@ -16,6 +18,7 @@ import { cellToBoundary, cellToLatLng, polygonToCells } from "h3-js"
 import { area, bbox, booleanPointInPolygon, circle, featureCollection, intersect, nearestPointOnLine, point, pointToLineDistance, voronoi } from "@turf/turf"
 import { createComparisonAdvice, createLocationAdvice } from "../analysis/locationAdvisor.js"
 import { createCompetitionModel, explainCompetitionThreat } from "../analysis/smartCompetition.js"
+import { saveAnalysisFeedback } from "../analysis/feedbackStore.js"
 
 const workflows = {
 	analyze: {
@@ -155,11 +158,12 @@ export function createApp() {
 				<div class="transit-analysis analysis-only"><div><span>AVTOBUS QULAYLIGI</span><strong id="transit-access-score">—</strong></div><div><p><small>Eng yaqin bekat</small><b id="nearest-transit-name">—</b><em id="nearest-transit-distance">—</em></p><p><small>800 metr ichida</small><b id="transit-count">—</b><em>noyob bekat</em></p></div><p id="transit-insight">Avtobus bekatlari hisoblanmoqda…</p></div>
 				<div class="demand-analysis analysis-only"><div><span>TALAB OQIMI POTENSIALI</span><strong id="demand-access-score">—</strong></div><div><p><small>Radius ichida</small><b id="demand-nearby-count">—</b><em>talab generatori</em></p><p><small>Kuchli auditoriya</small><b id="demand-leading-category">—</b><em id="demand-strongest-place">—</em></p></div><p id="demand-insight">Talab generatorlari hisoblanmoqda…</p></div>
 				<div class="road-analysis analysis-only"><div><span>YO‘L OQIMI POTENSIALI</span><strong id="road-access-score">—</strong></div><div><p><small>Eng yaqin asosiy yo‘l</small><b id="nearest-road-name">—</b><em id="nearest-road-distance">—</em></p><p><small>Yo‘l klassi</small><b id="nearest-road-class">—</b><em id="nearest-road-details">—</em></p></div><p id="road-insight">Yo‘l tarmog‘i hisoblanmoqda…</p></div>
-				<div class="find-results"><div class="district-summary"><span>MIJOZ TANLOVI SIMULYATSIYASI</span><strong id="find-district-name">—</strong><p id="find-district-summary">Hisoblanmoqda…</p><div><b id="find-population">—</b><small>Aholi</small><b id="find-density">—</b><small>odam/km²</small><b id="find-pois">—</b><small>Fast-food</small></div></div><div class="simulation-explainer"><strong>Simulyatsiyada nima sodir bo‘ladi?</strong><div><span>1</span><p><b>Hudud bo‘linadi</b>Tuman kichik olti burchakli qismlarga ajratiladi.</p></div><div><span>2</span><p><b>Har bir joy sinab ko‘riladi</b>Shu yerda yangi fast-food ochilsa, odamlar uni tanlash ehtimoli hisoblanadi.</p></div><div><span>3</span><p><b>Eng kuchli joylar saralanadi</b>Mijoz salohiyati, talab generatorlari, metro, avtobus va asosiy yo‘llar birgalikda solishtiriladi.</p></div></div><div class="huff-view"><div><button class="is-active" type="button" data-huff-view="opportunity">Eng yaxshi joylar</button><button type="button" data-huff-view="capture" disabled>Tanlangan joy ta’siri</button></div><p id="huff-view-note">Xaritadagi yorqin hududlar yangi fast-food uchun kuchliroq imkoniyatni bildiradi.</p></div><div class="candidate-impact is-hidden" id="candidate-impact"><span>TANLANGAN JOY NATIJASI</span><strong id="impact-score">—</strong><div><p><small>Bozor ulushi</small><b id="impact-share">—</b></p><p><small>Taxminiy mijozlar</small><b id="impact-population">—</b></p><p><small>Eng yaqin raqib</small><b id="impact-nearest">—</b></p></div><p id="impact-brands">Joy tanlanganda uning raqiblarga taxminiy ta’siri ko‘rsatiladi.</p></div><div class="candidate-list" id="candidate-list"></div><p class="model-note"><b>Ball formulasi:</b> 40% mijoz salohiyati + 20% talab oqimi + 15% metro + 15% avtobus + 10% yo‘l oqimi. Transport ballari bekatgacha masofa va yaqin bekatlar sonidan olinadi.</p></div>
+				<div class="find-results"><div class="district-summary"><span>MIJOZ TANLOVI SIMULYATSIYASI</span><strong id="find-district-name">—</strong><p id="find-district-summary">Hisoblanmoqda…</p><div><b id="find-population">—</b><small>Aholi</small><b id="find-density">—</b><small>odam/km²</small><b id="find-pois">—</b><small>Fast-food</small></div></div><div class="simulation-explainer"><strong>Simulyatsiyada nima sodir bo‘ladi?</strong><div><span>1</span><p><b>Hudud bo‘linadi</b>Tuman kichik olti burchakli qismlarga ajratiladi.</p></div><div><span>2</span><p><b>Har bir joy sinab ko‘riladi</b>Shu yerda yangi fast-food ochilsa, odamlar uni tanlash ehtimoli hisoblanadi.</p></div><div><span>3</span><p><b>Eng kuchli joylar saralanadi</b>Mijoz salohiyati, talab generatorlari, metro, avtobus va asosiy yo‘llar birgalikda solishtiriladi.</p></div></div><div class="huff-view"><div><button class="is-active" type="button" data-huff-view="opportunity">Eng yaxshi joylar</button><button type="button" data-huff-view="capture" disabled>Tanlangan joy ta’siri</button></div><p id="huff-view-note">Xaritadagi yorqin hududlar yangi fast-food uchun kuchliroq imkoniyatni bildiradi.</p></div><div class="candidate-impact is-hidden" id="candidate-impact"><span>TANLANGAN JOY NATIJASI</span><strong id="impact-score">—</strong><div><p><small>Bozor ulushi</small><b id="impact-share">—</b></p><p><small>Taxminiy mijozlar</small><b id="impact-population">—</b></p><p><small>Eng yaqin raqib</small><b id="impact-nearest">—</b></p></div><p id="impact-brands">Joy tanlanganda uning raqiblarga taxminiy ta’siri ko‘rsatiladi.</p></div><div class="candidate-list" id="candidate-list"></div><p class="model-note"><b>AI ball formulasi:</b> 30% raqobat imkoniyati + 25% talab + 12% metro + 15% avtobus + 8% yo‘l + 10% xizmat hududi bazaviy signali.</p></div>
 				<div class="report-section territory-section analysis-only"><div><h3>Taxminiy xizmat hududi</h3><span>Eng yaqin nuqta modeli</span></div><div class="territory-card"><div class="territory-primary"><span>Yangi lokatsiya maydoni</span><strong id="candidate-area">—</strong><small id="territory-share">Umumiy maydonning —</small></div><div class="territory-stats"><p><span>Tanlangan radius</span><b id="analysis-area">—</b></p><p><span>Raqiblar o‘rtachasi</span><b id="average-area">—</b></p><p><span>O‘rtachadan farqi</span><b id="area-comparison">—</b></p></div><div class="territory-bars"><div><span>Yangi nuqta</span><i><em id="candidate-area-bar"></em></i><b id="candidate-area-label">—</b></div><div><span>Raqib o‘rtachasi</span><i><em id="average-area-bar"></em></i><b id="average-area-label">—</b></div></div></div><div class="territory-note" id="territory-insight">Xizmat hududi raqobatchilargacha bo‘lgan to‘g‘ri chiziq masofasi asosida hisoblanadi.</div><div class="territory-explainer"><strong>Bu raqam qanday chiqdi?</strong><ol><li><span>1</span><p><b>Eng yaqin nuqta</b>Hududdagi har bir joy eng yaqin fast-food’ga biriktiriladi.</p></li><li><span>2</span><p><b>Radius bilan kesish</b>Faqat siz tanlagan doira ichidagi maydon qoldiriladi.</p></li><li><span>3</span><p><b>Raqib bilan solishtirish</b>Yangi hudud yaqin raqiblarning o‘rtacha maydoni bilan taqqoslanadi.</p></li></ol></div></div>
 				<div class="report-section analysis-only"><div><h3>Masofa bo‘yicha zichlik</h3><span>Fast food POI</span></div><div class="signal-list"><p><i></i>500 metr ichida <b id="band-500">—</b></p><p><i></i>1 kilometr ichida <b id="band-1000">—</b></p><p><i></i>2 kilometr ichida <b id="band-2000">—</b></p></div></div>
 				<div class="report-section analysis-only"><div><h3>Eng yaqin raqobatchi</h3></div><div class="empty-insight" id="nearest-competitor">Hisoblanmoqda…</div></div>
 				<div class="report-section analysis-only"><div><h3>Tahlil izohi</h3></div><div class="empty-insight" id="competition-insight">Hozircha tahlil faqat fast-food raqobati signaliga asoslanadi.</div></div>
+				<section class="analysis-feedback" data-analysis-feedback><div><span>AI FEEDBACK</span><strong>Bu tavsiya foydali bo‘ldimi?</strong><small>Javob keyingi scoring modelini yaxshilashga yordam beradi.</small></div><div class="feedback-actions"><button type="button" data-feedback-value="positive" aria-label="Tavsiya foydali bo‘ldi"><i data-lucide="thumbs-up"></i><span>Ha</span></button><button type="button" data-feedback-value="negative" aria-label="Tavsiya foydali bo‘lmadi"><i data-lucide="thumbs-down"></i><span>Yo‘q</span></button></div><div class="feedback-reasons is-hidden"><span>Nima mos kelmadi?</span><button type="button" data-feedback-reason="incorrect">Raqamlar noto‘g‘ri</button><button type="button" data-feedback-reason="unclear">Xulosa tushunarsiz</button><button type="button" data-feedback-reason="local_knowledge">Joyni bilaman — mos emas</button><button type="button" data-feedback-reason="missing_data">Ma’lumot yetishmaydi</button></div><p class="feedback-status is-hidden">Rahmat, javob saqlandi.</p></section>
 				<button class="save-report-button" id="save-analysis-report" type="button" disabled><span><i data-lucide="file-text"></i> Hisobotni saqlash</span><b>Hisobotlar</b></button>
 			</section>
 
@@ -172,6 +176,7 @@ export function createApp() {
 				<div class="comparison-columns"><article class="is-a"><header><span>A</span><div><small>BIRINCHI JOY</small><strong id="comparison-a-coordinate">—</strong></div><b id="comparison-a-score">—</b></header></article><article class="is-b"><header><span>B</span><div><small>IKKINCHI JOY</small><strong id="comparison-b-coordinate">—</strong></div><b id="comparison-b-score">—</b></header></article></div>
 				<div class="comparison-metrics" id="comparison-metrics"></div>
 				<p class="comparison-note">Umumiy ball: 40% raqobat imkoniyati, 20% talab, 15% metro, 15% avtobus va 10% yo‘l signali. Past raqobat bosimi afzal hisoblanadi.</p>
+				<section class="analysis-feedback" data-analysis-feedback><div><span>AI FEEDBACK</span><strong>Bu tavsiya foydali bo‘ldimi?</strong><small>Javob keyingi scoring modelini yaxshilashga yordam beradi.</small></div><div class="feedback-actions"><button type="button" data-feedback-value="positive" aria-label="Tavsiya foydali bo‘ldi"><i data-lucide="thumbs-up"></i><span>Ha</span></button><button type="button" data-feedback-value="negative" aria-label="Tavsiya foydali bo‘lmadi"><i data-lucide="thumbs-down"></i><span>Yo‘q</span></button></div><div class="feedback-reasons is-hidden"><span>Nima mos kelmadi?</span><button type="button" data-feedback-reason="incorrect">Raqamlar noto‘g‘ri</button><button type="button" data-feedback-reason="unclear">Xulosa tushunarsiz</button><button type="button" data-feedback-reason="local_knowledge">Joyni bilaman — mos emas</button><button type="button" data-feedback-reason="missing_data">Ma’lumot yetishmaydi</button></div><p class="feedback-status is-hidden">Rahmat, javob saqlandi.</p></section>
 				<button class="save-report-button" id="save-comparison-report" type="button" disabled><span><i data-lucide="file-text"></i> Taqqoslashni saqlash</span><b>Hisobotlar</b></button>
 			</section>
 
@@ -184,7 +189,7 @@ export function createApp() {
 	` )
 
 	createIcons( {
-		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, FileText, Layers3, LocateFixed, MapPin, Search, Sparkles, X },
+		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, FileText, Layers3, LocateFixed, MapPin, Search, Sparkles, ThumbsDown, ThumbsUp, X },
 		attrs: { "stroke-width": 1.8 },
 	} )
 
@@ -350,6 +355,7 @@ export function createApp() {
 		activeWorkflow = mode
 		pendingReport = null
 		pendingReportSaved = false
+		resetFeedbackForms()
 		root.querySelectorAll( ".save-report-button" ).forEach( button => button.disabled = true )
 		const copy = workflows[ mode ]
 		hidePanels()
@@ -411,9 +417,16 @@ export function createApp() {
 		reports.unshift( { id: `${ Date.now() }-${ Math.random().toString( 36 ).slice( 2, 8 ) }`, createdAt: new Date().toISOString(), ...reportData } )
 		localStorage.setItem( reportsStorageKey, JSON.stringify( reports.slice( 0, 50 ) ) )
 	}
+	const resetFeedbackForms = () => root.querySelectorAll( "[data-analysis-feedback]" ).forEach( form => {
+		form.classList.remove( "is-complete" )
+		form.querySelectorAll( "button" ).forEach( button => button.classList.remove( "is-selected" ) )
+		form.querySelector( ".feedback-reasons" ).classList.add( "is-hidden" )
+		form.querySelector( ".feedback-status" ).classList.add( "is-hidden" )
+	} )
 	const setPendingReport = reportData => {
-		pendingReport = reportData
+		pendingReport = { ...reportData, analysisId: globalThis.crypto?.randomUUID?.() || `${ Date.now() }-${ Math.random().toString( 36 ).slice( 2, 8 ) }`, modelVersion: "location-advisor-v2" }
 		pendingReportSaved = false
+		resetFeedbackForms()
 		root.querySelectorAll( ".save-report-button" ).forEach( button => {
 			button.disabled = false
 			button.classList.remove( "is-saved" )
@@ -431,6 +444,26 @@ export function createApp() {
 		button.classList.add( "is-saved" )
 		button.querySelector( "span" ).lastChild.textContent = " Saqlandi"
 		button.querySelector( "b" ).textContent = "Hisobotlarda"
+	}
+	const completeFeedback = ( form, helpful, reason = null ) => {
+		if( !pendingReport || form.classList.contains( "is-complete" ) ) {
+			return
+		}
+		saveAnalysisFeedback( {
+			analysisId: pendingReport.analysisId,
+			analysisType: pendingReport.type,
+			helpful,
+			reason,
+			modelVersion: pendingReport.modelVersion,
+			location: pendingReport.location,
+			radius: pendingReport.radius,
+			verdict: pendingReport.summary,
+			signals: pendingReport.trainingData || {},
+		} )
+		form.classList.add( "is-complete" )
+		form.querySelector( `[data-feedback-value="${ helpful ? "positive" : "negative" }"]` ).classList.add( "is-selected" )
+		form.querySelector( ".feedback-reasons" ).classList.add( "is-hidden" )
+		form.querySelector( ".feedback-status" ).classList.remove( "is-hidden" )
 	}
 	const escapeHtml = value => String( value ?? "" ).replace( /[&<>"]/g, character => ( { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" } )[ character ] )
 	const renderSavedReports = () => {
@@ -2094,6 +2127,14 @@ export function createApp() {
 	focusReset.addEventListener( "click", () => exitFocusMode( true ) )
 	get( "#save-analysis-report" ).addEventListener( "click", event => savePendingReport( event.currentTarget ) )
 	get( "#save-comparison-report" ).addEventListener( "click", event => savePendingReport( event.currentTarget ) )
+	root.querySelectorAll( "[data-analysis-feedback]" ).forEach( form => {
+		form.querySelector( "[data-feedback-value='positive']" ).addEventListener( "click", () => completeFeedback( form, true ) )
+		form.querySelector( "[data-feedback-value='negative']" ).addEventListener( "click", event => {
+			event.currentTarget.classList.add( "is-selected" )
+			form.querySelector( ".feedback-reasons" ).classList.remove( "is-hidden" )
+		} )
+		form.querySelectorAll( "[data-feedback-reason]" ).forEach( button => button.addEventListener( "click", () => completeFeedback( form, false, button.dataset.feedbackReason ) ) )
+	} )
 	root.querySelectorAll( "[data-compare-slot]" ).forEach( button => button.addEventListener( "click", () => {
 		activeCompareSlot = button.dataset.compareSlot
 		root.querySelectorAll( "[data-compare-slot]" ).forEach( item => item.classList.toggle( "is-active", item === button ) )
@@ -2161,6 +2202,7 @@ export function createApp() {
 				location: `A: ${ comparePoints.a.lat.toFixed( 5 )}, ${ comparePoints.a.lng.toFixed( 5 ) } · B: ${ comparePoints.b.lat.toFixed( 5 )}, ${ comparePoints.b.lng.toFixed( 5 ) }`,
 				radius,
 				metrics: [ { label: "A AI ball", value: `${ result.advice.a.score }/100` }, { label: "B AI ball", value: `${ result.advice.b.score }/100` }, { label: "AI ishonchi", value: `${ result.comparisonAdvice.confidence }%` } ],
+				trainingData: { winner: result.winner, a: { score: result.advice.a.score, competition: result.snapshots.a.pressureScore, demand: result.snapshots.a.demand.accessScore, metro: result.snapshots.a.metro.accessScore, transit: result.snapshots.a.transit.accessScore, road: result.snapshots.a.road.accessScore }, b: { score: result.advice.b.score, competition: result.snapshots.b.pressureScore, demand: result.snapshots.b.demand.accessScore, metro: result.snapshots.b.metro.accessScore, transit: result.snapshots.b.transit.accessScore, road: result.snapshots.b.road.accessScore } },
 			} )
 			return
 		}
@@ -2182,6 +2224,7 @@ export function createApp() {
 				summary: topCandidate ? `${ result.advice.verdict }. ${ result.advice.action }` : "Mos lokatsiya topilmadi.",
 				location: `${ district.properties.name } tumani`, radius,
 				metrics: [ { label: "AI ball", value: topCandidate ? `${ result.advice.score }/100` : "—" }, { label: "Mos format", value: topCandidate ? result.advice.format : "—" }, { label: "Tavsiyalar", value: `${ result.candidates.length } ta` } ],
+				trainingData: topCandidate ? { score: result.advice.score, competition: topCandidate.properties.competitionScore, competitionEquivalent: topCandidate.properties.competitionEquivalent, demand: topCandidate.properties.demandScore, metro: topCandidate.properties.metroScore, transit: topCandidate.properties.transitScore, road: topCandidate.properties.roadScore, customer: topCandidate.properties.customerScore, candidateCount: result.candidates.length } : { candidateCount: 0 },
 			} )
 		}
 		else {
@@ -2198,6 +2241,7 @@ export function createApp() {
 				summary: `${ result.advice.verdict }. ${ result.advice.action }`,
 				location: `${ selectedPoint.lat.toFixed( 5 ) }, ${ selectedPoint.lng.toFixed( 5 ) }`, radius,
 				metrics: [ { label: "AI ball", value: `${ result.advice.score }/100` }, { label: "Mos format", value: result.advice.format }, { label: "AI ishonchi", value: `${ result.advice.confidence }%` } ],
+				trainingData: { score: result.advice.score, confidence: result.advice.confidence, competition: result.pressureScore, competitionEquivalent: result.equivalentCompetitors, competitorCount: result.competitorCount, demand: result.demand.accessScore, metro: result.metro.accessScore, transit: result.transit.accessScore, road: result.road.accessScore, territoryRatio: result.territory.comparison || null, district: result.district?.properties.name || null },
 			} )
 		}
 	} )
