@@ -1333,9 +1333,9 @@ export function createApp() {
 		const servedRange = Math.max( 1, Math.max( ...servedValues ) - minimumServed )
 		scored.forEach( item => {
 			const customerScore = ( item.servedPopulation - minimumServed ) / servedRange * 100
-			const combinedScore = customerScore * 0.3 + ( 100 - item.competition.pressureScore ) * 0.2 + item.demand.accessScore * 0.15 + item.metro.accessScore * 0.125 + item.transit.accessScore * 0.125 + item.road.accessScore * 0.1
-			item.score = Math.round( 35 + combinedScore / 100 * 63 )
 			item.customerScore = Math.round( customerScore )
+			item.advice = createLocationAdvice( { competition: item.competition.pressureScore, demand: item.demand.accessScore, metro: item.metro.accessScore, transit: item.transit.accessScore, road: item.road.accessScore, territoryRatio: 1, competitorCount: item.competition.withinRadius.length, topThreat: item.competition.topThreat ? cleanName( item.competition.topThreat.feature.properties.brandName || item.competition.topThreat.feature.properties.name ) : null } )
+			item.score = item.advice.score
 			item.origin.properties.opportunityScore = item.score
 			item.origin.properties.displayScore = item.score
 			item.origin.properties.customerScore = item.customerScore
@@ -1359,6 +1359,9 @@ export function createApp() {
 		scored.sort( ( first, second ) => second.score - first.score )
 		candidateFeatures = []
 		for( const item of scored ) {
+			if( item.advice.score < 55 ) {
+				continue
+			}
 			const feature = point( item.coordinates, { id: `candidate-${ item.origin.properties.id }`, score: item.score, customerScore: item.customerScore, demandScore: item.demand.accessScore, demandCount: item.demand.withinRadius.length, demandCategory: item.demand.strongest?.feature.properties.categoryLabel || null, roadScore: item.road.accessScore, roadDistance: item.road.nearest?.distance ?? null, roadName: item.road.nearest?.feature.properties.name || null, nearby: item.nearby, nearest: item.nearest, servedPopulation: item.servedPopulation, marketShare: item.marketShare, district: district.properties.name, metroScore: item.metro.accessScore, metroDistance: item.metro.nearest?.distance ?? null, metroName: item.metro.nearest?.feature.properties.name || null, transitScore: item.transit.accessScore, transitCount: item.transit.nearby.length, transitDistance: item.transit.nearest?.distance ?? null, transitName: item.transit.nearest?.feature.properties.name || null, competitionScore: item.competition.pressureScore, competitionEquivalent: item.competition.equivalentCompetitors, topThreat: item.origin.properties.topThreat } )
 			const farEnough = candidateFeatures.every( candidate => distanceMeters( { lng: feature.geometry.coordinates[ 0 ], lat: feature.geometry.coordinates[ 1 ] }, candidate.geometry.coordinates ) >= 750 )
 			if( farEnough ) {
@@ -1379,7 +1382,9 @@ export function createApp() {
 		get( "#find-population" ).textContent = formatNumber( district.properties.population )
 		get( "#find-density" ).textContent = formatNumber( district.properties.populationDensity )
 		get( "#find-pois" ).textContent = district.properties.poiCount
-		get( "#find-district-summary" ).textContent = `Tuman ${ opportunityFeatures.length } ta kichik hududga bo‘lindi. Mijoz 30%, smart raqobat 20%, talab 15%, metro 12.5%, avtobus 12.5% va yo‘l 10% vazn bilan hisoblandi.`
+		get( "#find-district-summary" ).textContent = candidateFeatures.length
+			? `Tuman ${ opportunityFeatures.length } ta kichik hududga bo‘lindi. Chuqur tahlil bilan bir xil AI modeli bo‘yicha minimum chegaradan o‘tgan ${ candidateFeatures.length } ta joy topildi.`
+			: `Tuman ${ opportunityFeatures.length } ta kichik hududga bo‘lindi, ammo chuqur tahlil minimumidan o‘tgan lokatsiya topilmadi.`
 		get( "#map-score-legend" ).textContent = "Joy imkoniyati"
 		get( "#map-score-low" ).textContent = "Band"
 		get( "#map-score-high" ).textContent = "Imkoniyat"
@@ -1399,6 +1404,12 @@ export function createApp() {
 			} )
 			list.append( button )
 		} )
+		if( candidateFeatures.length === 0 ) {
+			const empty = document.createElement( "p" )
+			empty.className = "empty-insight"
+			empty.textContent = "Bu tumanda tanlangan radius bo‘yicha tavsiya qilishga yetarli signalga ega joy topilmadi. Radiusni o‘zgartirib qayta tekshiring."
+			list.append( empty )
+		}
 		map.fitBounds( bbox( district ), { padding: { top: 70, right: window.innerWidth > 800 ? 560 : 35, bottom: 70, left: 70 }, duration: 900 } )
 		const topCandidate = candidateFeatures[ 0 ]
 		const advice = topCandidate ? createCandidateAdvice( topCandidate ) : createLocationAdvice( {} )
