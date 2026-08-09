@@ -15,6 +15,7 @@ import {
 import { cellToBoundary, cellToLatLng, polygonToCells } from "h3-js"
 import { area, bbox, booleanPointInPolygon, circle, featureCollection, intersect, point, pointToLineDistance, voronoi } from "@turf/turf"
 import { createComparisonAdvice, createLocationAdvice } from "../analysis/locationAdvisor.js"
+import { createCompetitionModel, explainCompetitionThreat } from "../analysis/smartCompetition.js"
 
 const workflows = {
 	analyze: {
@@ -203,6 +204,7 @@ export function createApp() {
 	let activeWorkflow
 	let isSelecting = false
 	let poiFeatures = []
+	let getSmartCompetition = null
 	let metroFeatures = []
 	let transitFeatures = []
 	const transitSpatialIndex = new Map()
@@ -245,6 +247,7 @@ export function createApp() {
 	let transitLayerPromise
 	let demandLayerPromise
 	let roadLayerPromise
+	let poiLayerPromise
 	const territoryLegendCollapsed = localStorage.getItem( "ummon-territory-legend-collapsed" ) === "true"
 	territoryLegend.classList.toggle( "is-collapsed", territoryLegendCollapsed )
 	territoryLegendToggle.setAttribute( "aria-expanded", String( !territoryLegendCollapsed ) )
@@ -381,7 +384,7 @@ export function createApp() {
 		setActiveNav( null )
 		if( map ) {
 			if( !poiLayerLoaded ) {
-				await loadPoiLayer()
+				await ( poiLayerPromise || loadPoiLayer() )
 			}
 			else {
 				applyCustomLayerSettings()
@@ -820,12 +823,8 @@ export function createApp() {
 		return { nearby, nearest: nearby[ 0 ] || null, strongest: strongest[ 0 ] || null, accessScore }
 	}
 	const getComparisonSnapshot = location => {
-		const competitors = poiFeatures.map( feature => ( { feature, distance: distanceMeters( location, feature.geometry.coordinates ) } ) )
-			.filter( item => item.distance > 3 ).sort( ( first, second ) => first.distance - second.distance )
-		const within500 = competitors.filter( item => item.distance <= 500 ).length
-		const within1000 = competitors.filter( item => item.distance <= 1000 ).length
-		const within2000 = competitors.filter( item => item.distance <= 2000 ).length
-		const pressureScore = Math.min( 100, Math.round( within500 * 10 + ( within1000 - within500 ) * 3 + ( within2000 - within1000 ) * 0.75 ) )
+		const competition = getSmartCompetition( location, distanceMeters, { radius } )
+		const { competitors, pressureScore } = competition
 		const metro = getMetroContext( location )
 		const transit = getTransitContext( location )
 		const demand = getDemandContext( location )
@@ -845,13 +844,13 @@ export function createApp() {
 		const opportunityScore = 100 - pressureScore
 		const overallScore = Math.round( opportunityScore * 0.4 + demand.accessScore * 0.2 + metro.accessScore * 0.15 + transit.accessScore * 0.15 + road.accessScore * 0.1 )
 
-		return { location, overallScore, pressureScore, competitorCount: competitors.filter( item => item.distance <= radius ).length, nearestCompetitor: competitors[ 0 ] || null, territoryArea, metro, transit, demand, road, district }
+		return { location, overallScore, pressureScore, competitorCount: competition.withinRadius.length, equivalentCompetitors: competition.equivalentCompetitors, nearestCompetitor: [ ...competitors ].sort( ( first, second ) => first.distance - second.distance )[ 0 ] || null, topThreat: competition.topThreat, territoryArea, metro, transit, demand, road, district }
 	}
 	const renderComparison = () => {
 		const snapshots = { a: getComparisonSnapshot( comparePoints.a ), b: getComparisonSnapshot( comparePoints.b ) }
 		const advice = {
-			a: createLocationAdvice( { competition: snapshots.a.pressureScore, demand: snapshots.a.demand.accessScore, metro: snapshots.a.metro.accessScore, transit: snapshots.a.transit.accessScore, road: snapshots.a.road.accessScore, territoryRatio: 1, competitorCount: snapshots.a.competitorCount } ),
-			b: createLocationAdvice( { competition: snapshots.b.pressureScore, demand: snapshots.b.demand.accessScore, metro: snapshots.b.metro.accessScore, transit: snapshots.b.transit.accessScore, road: snapshots.b.road.accessScore, territoryRatio: 1, competitorCount: snapshots.b.competitorCount } ),
+			a: createLocationAdvice( { competition: snapshots.a.pressureScore, demand: snapshots.a.demand.accessScore, metro: snapshots.a.metro.accessScore, transit: snapshots.a.transit.accessScore, road: snapshots.a.road.accessScore, territoryRatio: 1, competitorCount: snapshots.a.competitorCount, topThreat: snapshots.a.topThreat ? cleanName( snapshots.a.topThreat.feature.properties.brandName || snapshots.a.topThreat.feature.properties.name ) : null } ),
+			b: createLocationAdvice( { competition: snapshots.b.pressureScore, demand: snapshots.b.demand.accessScore, metro: snapshots.b.metro.accessScore, transit: snapshots.b.transit.accessScore, road: snapshots.b.road.accessScore, territoryRatio: 1, competitorCount: snapshots.b.competitorCount, topThreat: snapshots.b.topThreat ? cleanName( snapshots.b.topThreat.feature.properties.brandName || snapshots.b.topThreat.feature.properties.name ) : null } ),
 		}
 		const comparisonAdvice = createComparisonAdvice( advice.a, advice.b )
 		const winner = comparisonAdvice.winner?.toLocaleLowerCase( "uz" ) || null
@@ -866,7 +865,7 @@ export function createApp() {
 		get( "#comparison-ai-risk" ).textContent = `Asosiy xavf: ${ comparisonAdvice.risk }.`
 		const metrics = [
 			{ label: "Raqobat bosimi", note: "Pastroq yaxshi", value: item => `${ item.pressureScore }/100`, raw: item => item.pressureScore, lower: true },
-			{ label: "Raqobatchilar", note: `${ radius / 1000 } km radius`, value: item => `${ item.competitorCount } ta`, raw: item => item.competitorCount, lower: true },
+			{ label: "Raqobat ta’siri", note: "Brand, masofa va hudud kesishuvi", value: item => `${ item.equivalentCompetitors } ekv.`, raw: item => item.equivalentCompetitors, lower: true },
 			{ label: "Talab oqimi", note: "Ta’lim, savdo, ofis va boshqa oqimlar", value: item => `${ item.demand.accessScore }/100`, raw: item => item.demand.accessScore },
 			{ label: "Metro", note: item => item.metro.nearest ? formatDistance( item.metro.nearest.distance ) : "Bekat yo‘q", value: item => `${ item.metro.accessScore }/100`, raw: item => item.metro.accessScore },
 			{ label: "Avtobus", note: item => `${ item.transit.nearby.length } ta bekat`, value: item => `${ item.transit.accessScore }/100`, raw: item => item.transit.accessScore },
@@ -965,15 +964,9 @@ export function createApp() {
 		return { totalArea, candidateArea, averageCompetitorArea, comparison, percentile }
 	}
 	const analyzeCompetition = () => {
-		const competitors = poiFeatures
-			.filter( feature => feature.properties.id !== selectedPoiId )
-			.map( feature => ( { feature, distance: distanceMeters( selectedPoint, feature.geometry.coordinates ) } ) )
-			.filter( item => item.distance > 3 )
-			.sort( ( first, second ) => first.distance - second.distance )
-		const within500 = competitors.filter( item => item.distance <= 500 )
-		const within1000 = competitors.filter( item => item.distance <= 1000 )
-		const within2000 = competitors.filter( item => item.distance <= 2000 )
-		const withinRadius = competitors.filter( item => item.distance <= radius )
+		const competition = getSmartCompetition( selectedPoint, distanceMeters, { radius, excludeId: selectedPoiId } )
+		const { competitors, withinRadius, pressureScore, pressureLevel, topThreat } = competition
+		const { within500, within1000, within2000 } = competition.bands
 		const brandCounts = new Map()
 		withinRadius.forEach( item => {
 			const { brandId, brandName } = item.feature.properties
@@ -984,11 +977,7 @@ export function createApp() {
 			}
 		} )
 		const dominantBrand = [ ...brandCounts.values() ].sort( ( first, second ) => second.count - first.count )[ 0 ]
-		const nearest = competitors[ 0 ]
-		const outer1000 = within1000.length - within500.length
-		const outer2000 = within2000.length - within1000.length
-		const pressureScore = Math.min( 100, Math.round( within500.length * 10 + outer1000 * 3 + outer2000 * 0.75 ) )
-		const pressureLevel = pressureScore >= 70 ? "Yuqori" : pressureScore >= 35 ? "O‘rtacha" : "Past"
+		const nearest = [ ...competitors ].sort( ( first, second ) => first.distance - second.distance )[ 0 ]
 		const territory = calculateTerritoryAnalysis()
 		const metro = getMetroContext( selectedPoint )
 		const transit = getTransitContext( selectedPoint )
@@ -1003,11 +992,11 @@ export function createApp() {
 
 		get( "#competition-score" ).textContent = pressureScore
 		get( "#competition-level" ).textContent = `${ pressureLevel } bosim`
-		get( "#competition-summary" ).textContent = `${ radius / 1000 } km radiusda ${ withinRadius.length } ta raqobatchi aniqlandi.`
+		get( "#competition-summary" ).textContent = `${ radius / 1000 } km radiusda ${ withinRadius.length } ta nuqta · ${ competition.equivalentCompetitors } ta standart raqibga teng ta’sir.`
 		get( "#competitor-count" ).textContent = withinRadius.length
 		get( "#brand-count" ).textContent = brandCounts.size
 		get( "#nearest-distance" ).textContent = nearest ? formatDistance( nearest.distance ) : "—"
-		get( "#dominant-brand" ).textContent = dominantBrand ? `${ dominantBrand.name } · ${ dominantBrand.count }` : "—"
+		get( "#dominant-brand" ).textContent = topThreat ? cleanName( topThreat.feature.properties.brandName || topThreat.feature.properties.name ) : dominantBrand ? `${ dominantBrand.name } · ${ dominantBrand.count }` : "—"
 		get( "#metro-access-score" ).textContent = metro.nearest ? `${ metro.accessScore }/100` : "—"
 		get( "#nearest-metro-name" ).textContent = metro.nearest?.feature.properties.name || "Bekat topilmadi"
 		get( "#nearest-metro-distance" ).textContent = metro.nearest ? formatDistance( metro.nearest.distance ) : "—"
@@ -1068,7 +1057,7 @@ export function createApp() {
 		get( "#nearest-competitor" ).textContent = nearest
 			? `${ cleanName( nearest.feature.properties.name ) } — ${ formatDistance( nearest.distance ) } masofada.`
 			: "2 km atrofida raqobatchi topilmadi."
-		get( "#competition-insight" ).textContent = insight
+		get( "#competition-insight" ).textContent = `${ insight } Eng kuchli xavf: ${ explainCompetitionThreat( topThreat, cleanName, formatDistance ) }`
 		get( ".score-ring" ).style.setProperty( "--score-angle", `${ pressureScore * 3.6 }deg` )
 		const district = getDistrictAt( selectedPoint )
 		if( district ) {
@@ -1086,9 +1075,9 @@ export function createApp() {
 			const districtMetricSelectors = [ "#district-population", "#district-pois", "#district-per-capita", "#district-comparison" ]
 			districtMetricSelectors.forEach( selector => get( selector ).textContent = "—" )
 		}
-		const advice = createLocationAdvice( { competition: pressureScore, demand: demand.accessScore, metro: metro.accessScore, transit: transit.accessScore, road: road.accessScore, territoryRatio: territory.comparison || 1, competitorCount: withinRadius.length } )
+		const advice = createLocationAdvice( { competition: pressureScore, demand: demand.accessScore, metro: metro.accessScore, transit: transit.accessScore, road: road.accessScore, territoryRatio: territory.comparison || 1, competitorCount: withinRadius.length, topThreat: topThreat ? cleanName( topThreat.feature.properties.brandName || topThreat.feature.properties.name ) : null } )
 		renderAiAdvice( advice )
-		return { pressureScore, pressureLevel, competitorCount: withinRadius.length, brandCount: brandCounts.size, nearest, territory, metro, transit, demand, road, district, advice, poiIds: [ ...withinRadius.map( item => item.feature.properties.id ), ...( selectedPoiId ? [ selectedPoiId ] : [] ) ] }
+		return { pressureScore, pressureLevel, competitorCount: withinRadius.length, equivalentCompetitors: competition.equivalentCompetitors, brandCount: brandCounts.size, nearest, topThreat, territory, metro, transit, demand, road, district, advice, poiIds: [ ...withinRadius.map( item => item.feature.properties.id ), ...( selectedPoiId ? [ selectedPoiId ] : [] ) ] }
 	}
 	const clearActivePoi = () => {
 		if( activePoiId && map?.getSource( "fast-food-poi" ) ) {
@@ -1236,7 +1225,7 @@ export function createApp() {
 		content.className = "candidate-popup__content"
 		const metroText = feature.properties.metroName ? `${ feature.properties.metroName } · ${ formatDistance( feature.properties.metroDistance ) }` : "Metro signali yo‘q"
 		const transitText = feature.properties.transitName ? `${ feature.properties.transitName } · ${ formatDistance( feature.properties.transitDistance ) }` : "Avtobus signali yo‘q"
-		content.innerHTML = `<span>#${ feature.properties.rank } · TAVSIYA ETILGAN JOY</span><strong>${ feature.properties.score }/100</strong><p>Mijoz ${ feature.properties.customerScore } · talab ${ feature.properties.demandScore } · metro ${ feature.properties.metroScore } · avtobus ${ feature.properties.transitScore } · yo‘l ${ feature.properties.roadScore }</p><small>${ feature.properties.demandCount } ta generator · ${ feature.properties.roadName ? `${ feature.properties.roadName } ${ formatDistance( feature.properties.roadDistance ) }` : "asosiy yo‘l signali yo‘q" } · Metro: ${ metroText } · Avtobus: ${ transitText }</small>`
+		content.innerHTML = `<span>#${ feature.properties.rank } · TAVSIYA ETILGAN JOY</span><strong>${ feature.properties.score }/100</strong><p>Smart raqobat ${ feature.properties.competitionScore } · mijoz ${ feature.properties.customerScore } · talab ${ feature.properties.demandScore } · metro ${ feature.properties.metroScore } · avtobus ${ feature.properties.transitScore } · yo‘l ${ feature.properties.roadScore }</p><small>${ feature.properties.competitionEquivalent } ta standart raqibga teng ta’sir${ feature.properties.topThreat ? ` · eng kuchli xavf: ${ feature.properties.topThreat }` : "" } · ${ feature.properties.roadName ? `${ feature.properties.roadName } ${ formatDistance( feature.properties.roadDistance ) }` : "asosiy yo‘l signali yo‘q" } · Metro: ${ metroText } · Avtobus: ${ transitText }</small>`
 		const button = document.createElement( "button" )
 		button.type = "button"
 		button.textContent = "Bu nuqtani chuqur tahlil qilish"
@@ -1296,14 +1285,15 @@ export function createApp() {
 			const transit = getTransitContext( center )
 			const demand = getDemandContext( center )
 			const road = getRoadContext( center )
-			return { origin, coordinates, servedPopulation, marketShare: servedPopulation / Number( district.properties.population ) * 100, nearby: distances.filter( distance => distance <= radius ).length, nearest: distances[ 0 ] ?? 5000, metro, transit, demand, road }
+			const competition = getSmartCompetition( center, distanceMeters, { radius } )
+			return { origin, coordinates, servedPopulation, marketShare: servedPopulation / Number( district.properties.population ) * 100, nearby: competition.withinRadius.length, nearest: distances[ 0 ] ?? 5000, metro, transit, demand, road, competition }
 		} )
 		const servedValues = scored.map( item => item.servedPopulation )
 		const minimumServed = Math.min( ...servedValues )
 		const servedRange = Math.max( 1, Math.max( ...servedValues ) - minimumServed )
 		scored.forEach( item => {
 			const customerScore = ( item.servedPopulation - minimumServed ) / servedRange * 100
-			const combinedScore = customerScore * 0.4 + item.demand.accessScore * 0.2 + item.metro.accessScore * 0.15 + item.transit.accessScore * 0.15 + item.road.accessScore * 0.1
+			const combinedScore = customerScore * 0.3 + ( 100 - item.competition.pressureScore ) * 0.2 + item.demand.accessScore * 0.15 + item.metro.accessScore * 0.125 + item.transit.accessScore * 0.125 + item.road.accessScore * 0.1
 			item.score = Math.round( 35 + combinedScore / 100 * 63 )
 			item.customerScore = Math.round( customerScore )
 			item.origin.properties.opportunityScore = item.score
@@ -1322,11 +1312,14 @@ export function createApp() {
 			item.origin.properties.transitCount = item.transit.nearby.length
 			item.origin.properties.transitDistance = item.transit.nearest?.distance ?? null
 			item.origin.properties.transitName = item.transit.nearest?.feature.properties.name || null
+			item.origin.properties.competitionScore = item.competition.pressureScore
+			item.origin.properties.competitionEquivalent = item.competition.equivalentCompetitors
+			item.origin.properties.topThreat = item.competition.topThreat ? cleanName( item.competition.topThreat.feature.properties.brandName || item.competition.topThreat.feature.properties.name ) : null
 		} )
 		scored.sort( ( first, second ) => second.score - first.score )
 		candidateFeatures = []
 		for( const item of scored ) {
-			const feature = point( item.coordinates, { id: `candidate-${ item.origin.properties.id }`, score: item.score, customerScore: item.customerScore, demandScore: item.demand.accessScore, demandCount: item.demand.withinRadius.length, demandCategory: item.demand.strongest?.feature.properties.categoryLabel || null, roadScore: item.road.accessScore, roadDistance: item.road.nearest?.distance ?? null, roadName: item.road.nearest?.feature.properties.name || null, nearby: item.nearby, nearest: item.nearest, servedPopulation: item.servedPopulation, marketShare: item.marketShare, district: district.properties.name, metroScore: item.metro.accessScore, metroDistance: item.metro.nearest?.distance ?? null, metroName: item.metro.nearest?.feature.properties.name || null, transitScore: item.transit.accessScore, transitCount: item.transit.nearby.length, transitDistance: item.transit.nearest?.distance ?? null, transitName: item.transit.nearest?.feature.properties.name || null } )
+			const feature = point( item.coordinates, { id: `candidate-${ item.origin.properties.id }`, score: item.score, customerScore: item.customerScore, demandScore: item.demand.accessScore, demandCount: item.demand.withinRadius.length, demandCategory: item.demand.strongest?.feature.properties.categoryLabel || null, roadScore: item.road.accessScore, roadDistance: item.road.nearest?.distance ?? null, roadName: item.road.nearest?.feature.properties.name || null, nearby: item.nearby, nearest: item.nearest, servedPopulation: item.servedPopulation, marketShare: item.marketShare, district: district.properties.name, metroScore: item.metro.accessScore, metroDistance: item.metro.nearest?.distance ?? null, metroName: item.metro.nearest?.feature.properties.name || null, transitScore: item.transit.accessScore, transitCount: item.transit.nearby.length, transitDistance: item.transit.nearest?.distance ?? null, transitName: item.transit.nearest?.feature.properties.name || null, competitionScore: item.competition.pressureScore, competitionEquivalent: item.competition.equivalentCompetitors, topThreat: item.origin.properties.topThreat } )
 			const farEnough = candidateFeatures.every( candidate => distanceMeters( { lng: feature.geometry.coordinates[ 0 ], lat: feature.geometry.coordinates[ 1 ] }, candidate.geometry.coordinates ) >= 750 )
 			if( farEnough ) {
 				feature.properties.rank = candidateFeatures.length + 1
@@ -1346,7 +1339,7 @@ export function createApp() {
 		get( "#find-population" ).textContent = formatNumber( district.properties.population )
 		get( "#find-density" ).textContent = formatNumber( district.properties.populationDensity )
 		get( "#find-pois" ).textContent = district.properties.poiCount
-		get( "#find-district-summary" ).textContent = `Tuman ${ opportunityFeatures.length } ta kichik hududga bo‘lindi. Mijoz 40%, talab 20%, metro 15%, avtobus 15% va yo‘l 10% vazn bilan hisoblanib, ${ candidateFeatures.length } ta eng kuchli joy ajratildi.`
+		get( "#find-district-summary" ).textContent = `Tuman ${ opportunityFeatures.length } ta kichik hududga bo‘lindi. Mijoz 30%, smart raqobat 20%, talab 15%, metro 12.5%, avtobus 12.5% va yo‘l 10% vazn bilan hisoblandi.`
 		get( "#map-score-legend" ).textContent = "Joy imkoniyati"
 		get( "#map-score-low" ).textContent = "Band"
 		get( "#map-score-high" ).textContent = "Imkoniyat"
@@ -1360,7 +1353,7 @@ export function createApp() {
 			button.type = "button"
 			button.dataset.candidateId = feature.properties.id
 			const metroLabel = feature.properties.metroName ? `metro ${ formatDistance( feature.properties.metroDistance ) }` : "metro signali yo‘q"
-			button.innerHTML = `<span>${ feature.properties.rank }</span><div><strong>${ feature.properties.score } ball · ${ feature.properties.marketShare.toFixed( 1 ) }% bozor ulushi</strong><small>Talab ${ feature.properties.demandScore}/100 · avtobus ${ feature.properties.transitScore}/100 · yo‘l ${ feature.properties.roadScore}/100 · ${ metroLabel }</small></div><b>Ko‘rish</b>`
+			button.innerHTML = `<span>${ feature.properties.rank }</span><div><strong>${ feature.properties.score } ball · ${ feature.properties.marketShare.toFixed( 1 ) }% bozor ulushi</strong><small>Raqobat ${ feature.properties.competitionScore}/100 · talab ${ feature.properties.demandScore}/100 · yo‘l ${ feature.properties.roadScore}/100 · ${ metroLabel }</small></div><b>Ko‘rish</b>`
 			button.addEventListener( "click", () => {
 				showCandidatePopup( feature )
 			} )
@@ -1368,7 +1361,7 @@ export function createApp() {
 		} )
 		map.fitBounds( bbox( district ), { padding: { top: 70, right: window.innerWidth > 800 ? 560 : 35, bottom: 70, left: 70 }, duration: 900 } )
 		const topCandidate = candidateFeatures[ 0 ]
-		const advice = topCandidate ? createLocationAdvice( { competition: Math.min( 100, topCandidate.properties.nearby * 7 ), demand: topCandidate.properties.demandScore, metro: topCandidate.properties.metroScore, transit: topCandidate.properties.transitScore, road: topCandidate.properties.roadScore, territoryRatio: 1, competitorCount: topCandidate.properties.nearby } ) : createLocationAdvice( {} )
+		const advice = topCandidate ? createLocationAdvice( { competition: topCandidate.properties.competitionScore, demand: topCandidate.properties.demandScore, metro: topCandidate.properties.metroScore, transit: topCandidate.properties.transitScore, road: topCandidate.properties.roadScore, territoryRatio: 1, competitorCount: topCandidate.properties.nearby, topThreat: topCandidate.properties.topThreat } ) : createLocationAdvice( {} )
 		renderAiAdvice( advice )
 		return { district, candidates: candidateFeatures, advice }
 	}
@@ -1715,6 +1708,7 @@ export function createApp() {
 
 			const data = await response.json()
 			poiFeatures = data.features
+			getSmartCompetition = createCompetitionModel( poiFeatures )
 			updateDistrictStats()
 			if( searchInput.value.trim().length >= 2 ) {
 				renderSearchResults( searchInput.value )
@@ -1967,7 +1961,7 @@ export function createApp() {
 		transitLayerPromise = loadTransitLayer()
 		demandLayerPromise = loadDemandLayer()
 		roadLayerPromise = loadRoadLayer()
-		loadPoiLayer()
+		poiLayerPromise = loadPoiLayer()
 	} )
 
 	searchInput.addEventListener( "input", () => renderSearchResults( searchInput.value ) )
@@ -2080,7 +2074,7 @@ export function createApp() {
 
 	action.addEventListener( "click", async() => {
 		isSelecting = false
-		await Promise.all( [ metroLayerPromise, transitLayerPromise, demandLayerPromise, roadLayerPromise ].filter( Boolean ) )
+		await Promise.all( [ poiLayerPromise, metroLayerPromise, transitLayerPromise, demandLayerPromise, roadLayerPromise ].filter( Boolean ) )
 		closeLayerPanel()
 		hidePanels()
 		syncLayerControls()

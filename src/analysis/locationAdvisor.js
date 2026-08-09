@@ -32,6 +32,7 @@ export function createLocationAdvice( input ) {
 		{ value: territoryScore, text: "Taxminiy xizmat hududi qulay" },
 	] ).filter( signal => signal.value >= 58 ).slice( 0, 3 ).map( signal => signal.text )
 	const risks = rankSignals( [
+		{ value: input.topThreat ? Math.max( 58, competition ) : 0, text: input.topThreat ? `${ input.topThreat } eng kuchli bevosita xavf` : "" },
 		{ value: competition, text: `${ input.competitorCount || 0 } ta raqobatchi sabab bosim yuqori` },
 		{ value: 100 - demand, text: "Yaqin talab generatorlari yetarli emas" },
 		{ value: 100 - transport, text: "Jamoat transporti oqimi zaif" },
