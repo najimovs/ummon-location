@@ -162,6 +162,7 @@ export function createApp() {
 				<div class="report-section analysis-only"><div><h3>Masofa bo‘yicha zichlik</h3><span>Fast food POI</span></div><div class="signal-list"><p><i></i>500 metr ichida <b id="band-500">—</b></p><p><i></i>1 kilometr ichida <b id="band-1000">—</b></p><p><i></i>2 kilometr ichida <b id="band-2000">—</b></p></div></div>
 				<div class="report-section analysis-only"><div><h3>Eng yaqin raqobatchi</h3></div><div class="empty-insight" id="nearest-competitor">Hisoblanmoqda…</div></div>
 				<div class="report-section analysis-only"><div><h3>Tahlil izohi</h3></div><div class="empty-insight" id="competition-insight">Hozircha tahlil faqat fast-food raqobati signaliga asoslanadi.</div></div>
+				<button class="save-report-button" id="save-analysis-report" type="button" disabled><span><i data-lucide="file-text"></i> Hisobotni saqlash</span><b>Hisobotlar</b></button>
 			</section>
 
 			<section class="page-panel is-hidden" data-panel="page">
@@ -173,6 +174,7 @@ export function createApp() {
 				<div class="comparison-columns"><article class="is-a"><header><span>A</span><div><small>BIRINCHI JOY</small><strong id="comparison-a-coordinate">—</strong></div><b id="comparison-a-score">—</b></header></article><article class="is-b"><header><span>B</span><div><small>IKKINCHI JOY</small><strong id="comparison-b-coordinate">—</strong></div><b id="comparison-b-score">—</b></header></article></div>
 				<div class="comparison-metrics" id="comparison-metrics"></div>
 				<p class="comparison-note">Umumiy ball: 40% raqobat imkoniyati, 20% talab, 15% metro, 15% avtobus va 10% yo‘l signali. Past raqobat bosimi afzal hisoblanadi.</p>
+				<button class="save-report-button" id="save-comparison-report" type="button" disabled><span><i data-lucide="file-text"></i> Taqqoslashni saqlash</span><b>Hisobotlar</b></button>
 			</section>
 
 			<div class="map-hint is-hidden"><span><i data-lucide="locate-fixed"></i></span> Xaritadan nuqtani tanlang</div>
@@ -194,6 +196,8 @@ export function createApp() {
 	let compareMarkers = []
 	let comparePoints = { a: null, b: null }
 	let activeCompareSlot = "a"
+	let pendingReport = null
+	let pendingReportSaved = false
 	let radius = 1000
 	let selectedPoint
 	let selectedPoiId
@@ -341,6 +345,9 @@ export function createApp() {
 		activePopup?.remove()
 		clearBrandMode()
 		activeWorkflow = mode
+		pendingReport = null
+		pendingReportSaved = false
+		root.querySelectorAll( ".save-report-button" ).forEach( button => button.disabled = true )
 		const copy = workflows[ mode ]
 		hidePanels()
 		workflow.classList.remove( "is-hidden" )
@@ -388,6 +395,64 @@ export function createApp() {
 		compare: [ "SOLISHTIRISH", "Lokatsiyalarni taqqoslash", "Ikki yoki undan ortiq lokatsiyaning biznes signallarini yonma-yon solishtiring.", "Taqqoslash ro‘yxati bo‘sh", "Hisobotlardan lokatsiyalarni tanlab bu yerga qo‘shish mumkin bo‘ladi." ],
 		settings: [ "SOZLAMALAR", "Mahsulot sozlamalari", "Standart radius, til va xarita ko‘rinishini boshqaring.", "Sozlamalar tez orada", "MVP davomida asosiy parametrlar shu bo‘limga qo‘shiladi." ],
 	}
+	const reportsStorageKey = "ummon-analysis-reports"
+	const readSavedReports = () => {
+		try {
+			const saved = JSON.parse( localStorage.getItem( reportsStorageKey ) || "[]" )
+			return Array.isArray( saved ) ? saved : []
+		}
+		catch {
+			return []
+		}
+	}
+	const saveReport = reportData => {
+		const reports = readSavedReports()
+		reports.unshift( { id: `${ Date.now() }-${ Math.random().toString( 36 ).slice( 2, 8 ) }`, createdAt: new Date().toISOString(), ...reportData } )
+		localStorage.setItem( reportsStorageKey, JSON.stringify( reports.slice( 0, 50 ) ) )
+	}
+	const setPendingReport = reportData => {
+		pendingReport = reportData
+		pendingReportSaved = false
+		root.querySelectorAll( ".save-report-button" ).forEach( button => {
+			button.disabled = false
+			button.classList.remove( "is-saved" )
+			button.querySelector( "span" ).lastChild.textContent = button.id === "save-comparison-report" ? " Taqqoslashni saqlash" : " Hisobotni saqlash"
+			button.querySelector( "b" ).textContent = "Hisobotlar"
+		} )
+	}
+	const savePendingReport = button => {
+		if( !pendingReport || pendingReportSaved ) {
+			return
+		}
+		saveReport( pendingReport )
+		pendingReportSaved = true
+		button.disabled = true
+		button.classList.add( "is-saved" )
+		button.querySelector( "span" ).lastChild.textContent = " Saqlandi"
+		button.querySelector( "b" ).textContent = "Hisobotlarda"
+	}
+	const escapeHtml = value => String( value ?? "" ).replace( /[&<>"]/g, character => ( { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" } )[ character ] )
+	const renderSavedReports = () => {
+		const reports = readSavedReports()
+		const content = get( "#page-content" )
+		if( !reports.length ) {
+			content.innerHTML = "<div class=\"empty-state\"><span><i data-lucide=\"file-text\"></i></span><strong>Hali hisobot yo‘q</strong><p>Birinchi tahlil yakunlanganda natija avtomatik shu yerda saqlanadi.</p></div>"
+			createIcons( { icons: { FileText }, attrs: { "stroke-width": 1.8 } } )
+			return
+		}
+		content.innerHTML = `<div class="reports-toolbar"><span><b>${ reports.length }</b> ta saqlangan hisobot</span><button type="button" data-clear-reports>Barchasini o‘chirish</button></div><div class="saved-reports">${ reports.map( savedReport => {
+			const date = new Intl.DateTimeFormat( "uz-UZ", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" } ).format( new Date( savedReport.createdAt ) )
+			return `<article><div class="report-type is-${ escapeHtml( savedReport.type ) }">${ escapeHtml( savedReport.typeLabel ) }</div><header><strong>${ escapeHtml( savedReport.title ) }</strong><button type="button" data-delete-report="${ escapeHtml( savedReport.id ) }" aria-label="Hisobotni o‘chirish">×</button></header><p>${ escapeHtml( savedReport.summary ) }</p><div class="saved-report-metrics">${ ( savedReport.metrics || [] ).map( metric => `<span><small>${ escapeHtml( metric.label ) }</small><b>${ escapeHtml( metric.value ) }</b></span>` ).join( "" ) }</div><footer><span>${ escapeHtml( savedReport.location ) }</span><time>${ date }</time></footer></article>`
+		} ).join( "" ) }</div>`
+		content.querySelector( "[data-clear-reports]" ).addEventListener( "click", () => {
+			localStorage.removeItem( reportsStorageKey )
+			renderSavedReports()
+		} )
+		content.querySelectorAll( "[data-delete-report]" ).forEach( button => button.addEventListener( "click", () => {
+			localStorage.setItem( reportsStorageKey, JSON.stringify( readSavedReports().filter( savedReport => savedReport.id !== button.dataset.deleteReport ) ) )
+			renderSavedReports()
+		} ) )
+	}
 
 	const showPage = view => {
 		closeLayerPanel()
@@ -399,8 +464,13 @@ export function createApp() {
 		get( "#page-eyebrow" ).textContent = data[ 0 ]
 		get( "#page-title" ).textContent = data[ 1 ]
 		get( "#page-description" ).textContent = data[ 2 ]
-		get( "#page-content" ).innerHTML = `<div class="empty-state"><span><i data-lucide="target"></i></span><strong>${ data[ 3 ] }</strong><p>${ data[ 4 ] }</p></div>`
-		createIcons( { icons: { Target }, attrs: { "stroke-width": 1.8 } } )
+		if( view === "reports" ) {
+			renderSavedReports()
+		}
+		else {
+			get( "#page-content" ).innerHTML = `<div class="empty-state"><span><i data-lucide="target"></i></span><strong>${ data[ 3 ] }</strong><p>${ data[ 4 ] }</p></div>`
+			createIcons( { icons: { Target }, attrs: { "stroke-width": 1.8 } } )
+		}
 		clearSelection()
 		setActiveNav( view )
 		if( poiLayerLoaded ) {
@@ -736,6 +806,7 @@ export function createApp() {
 		} ).join( "" )
 		comparison.classList.remove( "is-hidden" )
 		map.fitBounds( [ [ Math.min( comparePoints.a.lng, comparePoints.b.lng ), Math.min( comparePoints.a.lat, comparePoints.b.lat ) ], [ Math.max( comparePoints.a.lng, comparePoints.b.lng ), Math.max( comparePoints.a.lat, comparePoints.b.lat ) ] ], { padding: { top: 80, right: window.innerWidth > 800 ? 610 : 40, bottom: 80, left: 80 }, maxZoom: 15, duration: 900 } )
+		return { snapshots, winner }
 	}
 	const showMetroConnection = ( location, metro ) => {
 		const features = metro.nearest ? [ {
@@ -937,6 +1008,7 @@ export function createApp() {
 			const districtMetricSelectors = [ "#district-population", "#district-pois", "#district-per-capita", "#district-comparison" ]
 			districtMetricSelectors.forEach( selector => get( selector ).textContent = "—" )
 		}
+		return { pressureScore, pressureLevel, competitorCount: withinRadius.length, brandCount: brandCounts.size, nearest, territory, metro, transit, demand, road, district }
 	}
 	const clearActivePoi = () => {
 		if( activePoiId && map?.getSource( "fast-food-poi" ) ) {
@@ -1217,6 +1289,7 @@ export function createApp() {
 			list.append( button )
 		} )
 		map.fitBounds( bbox( district ), { padding: { top: 70, right: window.innerWidth > 800 ? 560 : 35, bottom: 70, left: 70 }, duration: 900 } )
+		return { district, candidates: candidateFeatures }
 	}
 
 	const clearBrandMode = () => {
@@ -1868,6 +1941,8 @@ export function createApp() {
 	get( ".close-report" ).addEventListener( "click", showMap )
 	get( ".close-page" ).addEventListener( "click", showMap )
 	get( ".close-comparison" ).addEventListener( "click", showMap )
+	get( "#save-analysis-report" ).addEventListener( "click", event => savePendingReport( event.currentTarget ) )
+	get( "#save-comparison-report" ).addEventListener( "click", event => savePendingReport( event.currentTarget ) )
 	root.querySelectorAll( "[data-compare-slot]" ).forEach( button => button.addEventListener( "click", () => {
 		activeCompareSlot = button.dataset.compareSlot
 		root.querySelectorAll( "[data-compare-slot]" ).forEach( item => item.classList.toggle( "is-active", item === button ) )
@@ -1930,8 +2005,6 @@ export function createApp() {
 		await Promise.all( [ metroLayerPromise, transitLayerPromise, demandLayerPromise, roadLayerPromise ].filter( Boolean ) )
 		closeLayerPanel()
 		hidePanels()
-		report.classList.remove( "is-hidden" )
-		report.classList.toggle( "is-find-report", activeWorkflow === "find" )
 		layerSettings.metro = true
 		layerSettings.transitStops = true
 		layerSettings.roadFlow = true
@@ -1939,26 +2012,49 @@ export function createApp() {
 		syncLayerControls()
 		if( activeWorkflow === "compare" ) {
 			territoryLegend.classList.add( "is-hidden" )
-			renderComparison()
+			const result = renderComparison()
+			const winnerLabel = result.winner ? `${ result.winner.toUpperCase() } lokatsiya` : "Teng natija"
+			setPendingReport( {
+				type: "compare", typeLabel: "Taqqoslash", title: `${ winnerLabel } tavsiya etildi`,
+				summary: get( "#comparison-summary" ).textContent,
+				location: `A: ${ comparePoints.a.lat.toFixed( 5 )}, ${ comparePoints.a.lng.toFixed( 5 ) } · B: ${ comparePoints.b.lat.toFixed( 5 )}, ${ comparePoints.b.lng.toFixed( 5 ) }`,
+				radius,
+				metrics: [ { label: "A ball", value: `${ result.snapshots.a.overallScore }/100` }, { label: "B ball", value: `${ result.snapshots.b.overallScore }/100` }, { label: "G‘olib", value: winnerLabel } ],
+			} )
 			return
 		}
+		report.classList.remove( "is-hidden" )
+		report.classList.toggle( "is-find-report", activeWorkflow === "find" )
 		if( activeWorkflow === "find" ) {
 			territoryLegend.classList.add( "is-hidden" )
-			findDistrictLocations()
+			const result = findDistrictLocations()
 			const district = districtFeatures.find( feature => feature.properties.id === selectedDistrictId )
 			get( "#report-title" ).textContent = "Tavsiya etilgan lokatsiyalar"
 			get( "#report-location" ).textContent = `${ district.properties.name } · ${ radius / 1000 } km lokal radius`
+			const topCandidate = result.candidates[ 0 ]
+			setPendingReport( {
+				type: "find", typeLabel: "Joy topish", title: `${ district.properties.name } uchun ${ result.candidates.length } ta joy`,
+				summary: topCandidate ? `Eng kuchli lokatsiya ${ topCandidate.properties.score } ball oldi. Tuman bo‘yicha barcha kichik hududlar solishtirildi.` : "Mos lokatsiya topilmadi.",
+				location: `${ district.properties.name } tumani`, radius,
+				metrics: [ { label: "Eng yuqori ball", value: topCandidate ? `${ topCandidate.properties.score }/100` : "—" }, { label: "Tavsiyalar", value: `${ result.candidates.length } ta` }, { label: "Aholi", value: formatNumber( district.properties.population ) } ],
+			} )
 		}
 		else {
 			layerSettings.serviceAreas = true
 			saveLayerSettings()
 			syncLayerControls()
-			analyzeCompetition()
+			const result = analyzeCompetition()
 			syncLayerControls()
 			applyCustomLayerSettings()
 			territoryLegend.classList.remove( "is-hidden" )
 			get( "#report-title" ).textContent = "Raqobat tahlili"
 			get( "#report-location" ).textContent = `${ selectedPoint.lat.toFixed( 5 ) }, ${ selectedPoint.lng.toFixed( 5 ) } · ${ radius / 1000 } km`
+			setPendingReport( {
+				type: "analyze", typeLabel: "Lokatsiya tahlili", title: result.district ? `${ result.district.properties.name }dagi lokatsiya` : "Tanlangan lokatsiya",
+				summary: `${ radius / 1000 } km radiusda ${ result.competitorCount } ta raqobatchi. Raqobat bosimi ${ result.pressureLevel.toLocaleLowerCase( "uz" ) }.`,
+				location: `${ selectedPoint.lat.toFixed( 5 ) }, ${ selectedPoint.lng.toFixed( 5 ) }`, radius,
+				metrics: [ { label: "Raqobat", value: `${ result.pressureScore }/100` }, { label: "Talab", value: `${ result.demand.accessScore }/100` }, { label: "Xizmat hududi", value: formatArea( result.territory.candidateArea ) } ],
+			} )
 		}
 	} )
 }
