@@ -93,11 +93,12 @@ export function createApp() {
 			</section>
 
 			<section class="report-panel is-hidden" data-panel="report">
-				<div class="report-head"><div><span class="eyebrow">LOCATION REPORT</span><h2 id="report-title">Fast Food Fit</h2><small id="report-location">Tanlangan lokatsiya</small></div><button class="close-report" type="button"><i data-lucide="x"></i></button></div>
-				<div class="score-block"><div class="score-ring"><strong>—</strong><small>/100</small></div><div><span>AI LOCATION SCORE</span><strong>Hisoblashga tayyor</strong><p>Real geo-data ulanganda shu yerda rating chiqadi.</p></div></div>
-				<div class="metric-grid"><article><span>Talab</span><strong>—</strong></article><article><span>Raqobat</span><strong>—</strong></article><article><span>Transport</span><strong>—</strong></article><article><span>Delivery</span><strong>—</strong></article></div>
-				<div class="report-section"><div><h3>Asosiy signallar</h3><span>500 m · 1 km · 2 km</span></div><div class="signal-list"><p><i></i>Metro va jamoat transporti <b>—</b></p><p><i></i>Fast food raqobatchilari <b>—</b></p><p><i></i>Auditoriya obyektlari <b>—</b></p></div></div>
-				<div class="report-section"><div><h3>AI xulosasi</h3></div><div class="empty-insight">Geo-data tahlilidan keyin kuchli tomonlar, xavflar va tavsiya shu yerda paydo bo‘ladi.</div></div>
+				<div class="report-head"><div><span class="eyebrow">REAL GEO ANALYTICS</span><h2 id="report-title">Raqobat tahlili</h2><small id="report-location">Tanlangan lokatsiya</small></div><button class="close-report" type="button"><i data-lucide="x"></i></button></div>
+				<div class="score-block"><div class="score-ring"><strong id="competition-score">—</strong><small>/100</small></div><div><span>RAQOBAT BOSIMI</span><strong id="competition-level">Hisoblanmoqda</strong><p id="competition-summary">Radius ichidagi fast-food nuqtalari asosida.</p></div></div>
+				<div class="metric-grid"><article><span>Raqobatchilar</span><strong id="competitor-count">—</strong></article><article><span>Tarmoq brandlari</span><strong id="brand-count">—</strong></article><article><span>Eng yaqin raqib</span><strong id="nearest-distance">—</strong></article><article><span>Dominant brand</span><strong id="dominant-brand">—</strong></article></div>
+				<div class="report-section"><div><h3>Masofa bo‘yicha zichlik</h3><span>Fast food POI</span></div><div class="signal-list"><p><i></i>500 metr ichida <b id="band-500">—</b></p><p><i></i>1 kilometr ichida <b id="band-1000">—</b></p><p><i></i>2 kilometr ichida <b id="band-2000">—</b></p></div></div>
+				<div class="report-section"><div><h3>Eng yaqin raqobatchi</h3></div><div class="empty-insight" id="nearest-competitor">Hisoblanmoqda…</div></div>
+				<div class="report-section"><div><h3>Tahlil izohi</h3></div><div class="empty-insight" id="competition-insight">Hozircha tahlil faqat fast-food raqobati signaliga asoslanadi.</div></div>
 			</section>
 
 			<section class="page-panel is-hidden" data-panel="page">
@@ -119,6 +120,7 @@ export function createApp() {
 	let marker
 	let radius = 1000
 	let selectedPoint
+	let selectedPoiId
 	let activeWorkflow
 	let isSelecting = false
 	let poiFeatures = []
@@ -143,6 +145,7 @@ export function createApp() {
 
 	const clearSelection = () => {
 		selectedPoint = null
+		selectedPoiId = null
 		isSelecting = false
 		action.disabled = true
 		get( "#selected-location" ).textContent = "Xaritani bosing"
@@ -156,8 +159,9 @@ export function createApp() {
 		}
 	}
 
-	const selectLocation = point => {
+	const selectLocation = ( point, poiId = null ) => {
 		selectedPoint = point
+		selectedPoiId = poiId
 		get( "#selected-location" ).textContent = `${ point.lat.toFixed( 5 ) }, ${ point.lng.toFixed( 5 ) }`
 		action.disabled = false
 		hint.classList.add( "is-hidden" )
@@ -250,6 +254,65 @@ export function createApp() {
 
 	const cleanName = value => String( value || "Nomsiz fast food" ).replace( /^"+|"+$/g, "" )
 	const normalizeSearch = value => String( value || "" ).toLocaleLowerCase( "uz" ).replace( /[’'`]/g, "" ).replace( /[^\p{L}\p{N}]+/gu, " " ).trim()
+	const distanceMeters = ( point, coordinates ) => {
+		const earthRadius = 6371000
+		const latitude1 = point.lat * Math.PI / 180
+		const latitude2 = coordinates[ 1 ] * Math.PI / 180
+		const latitudeDelta = ( coordinates[ 1 ] - point.lat ) * Math.PI / 180
+		const longitudeDelta = ( coordinates[ 0 ] - point.lng ) * Math.PI / 180
+		const value = Math.sin( latitudeDelta / 2 ) ** 2
+			+ Math.cos( latitude1 ) * Math.cos( latitude2 ) * Math.sin( longitudeDelta / 2 ) ** 2
+
+		return earthRadius * 2 * Math.atan2( Math.sqrt( value ), Math.sqrt( 1 - value ) )
+	}
+	const formatDistance = distance => distance < 1000 ? `${ Math.round( distance ) } m` : `${ ( distance / 1000 ).toFixed( 1 ) } km`
+	const analyzeCompetition = () => {
+		const competitors = poiFeatures
+			.filter( feature => feature.properties.id !== selectedPoiId )
+			.map( feature => ( { feature, distance: distanceMeters( selectedPoint, feature.geometry.coordinates ) } ) )
+			.filter( item => item.distance > 3 )
+			.sort( ( first, second ) => first.distance - second.distance )
+		const within500 = competitors.filter( item => item.distance <= 500 )
+		const within1000 = competitors.filter( item => item.distance <= 1000 )
+		const within2000 = competitors.filter( item => item.distance <= 2000 )
+		const withinRadius = competitors.filter( item => item.distance <= radius )
+		const brandCounts = new Map()
+		withinRadius.forEach( item => {
+			const { brandId, brandName } = item.feature.properties
+			if( brandId ) {
+				const current = brandCounts.get( brandId ) ?? { name: brandName || brandId, count: 0 }
+				current.count++
+				brandCounts.set( brandId, current )
+			}
+		} )
+		const dominantBrand = [ ...brandCounts.values() ].sort( ( first, second ) => second.count - first.count )[ 0 ]
+		const nearest = competitors[ 0 ]
+		const outer1000 = within1000.length - within500.length
+		const outer2000 = within2000.length - within1000.length
+		const pressureScore = Math.min( 100, Math.round( within500.length * 10 + outer1000 * 3 + outer2000 * 0.75 ) )
+		const pressureLevel = pressureScore >= 70 ? "Yuqori" : pressureScore >= 35 ? "O‘rtacha" : "Past"
+		const insight = pressureScore >= 70
+			? "Bu hududda fast-food klasteri shakllangan. Talab signali bo‘lishi mumkin, ammo yangi biznes aniq format va kuchli differensiatsiya bilan kirishi kerak."
+			: pressureScore >= 35
+				? "Raqobat muvozanatli. Yaqin raqiblarning formati va dominant brand taklifidan farqlanish imkoniyati bor."
+				: "Bevosita raqobat past. Bu imkoniyat bo‘lishi mumkin, lekin past zichlik talab yetarli degani emas — keyingi signallar bilan tekshirish kerak."
+
+		get( "#competition-score" ).textContent = pressureScore
+		get( "#competition-level" ).textContent = `${ pressureLevel } bosim`
+		get( "#competition-summary" ).textContent = `${ radius / 1000 } km radiusda ${ withinRadius.length } ta raqobatchi aniqlandi.`
+		get( "#competitor-count" ).textContent = withinRadius.length
+		get( "#brand-count" ).textContent = brandCounts.size
+		get( "#nearest-distance" ).textContent = nearest ? formatDistance( nearest.distance ) : "—"
+		get( "#dominant-brand" ).textContent = dominantBrand ? `${ dominantBrand.name } · ${ dominantBrand.count }` : "—"
+		get( "#band-500" ).textContent = within500.length
+		get( "#band-1000" ).textContent = within1000.length
+		get( "#band-2000" ).textContent = within2000.length
+		get( "#nearest-competitor" ).textContent = nearest
+			? `${ cleanName( nearest.feature.properties.name ) } — ${ formatDistance( nearest.distance ) } masofada.`
+			: "2 km atrofida raqobatchi topilmadi."
+		get( "#competition-insight" ).textContent = insight
+		get( ".score-ring" ).style.setProperty( "--score-angle", `${ pressureScore * 3.6 }deg` )
+	}
 	const clearActivePoi = () => {
 		if( activePoiId && map?.getSource( "fast-food-poi" ) ) {
 			map.setFeatureState( { source: "fast-food-poi", id: activePoiId }, { selected: false } )
@@ -341,7 +404,7 @@ export function createApp() {
 		analyzeButton.addEventListener( "click", () => {
 			activePopup.remove()
 			startWorkflow( "analyze" )
-			selectLocation( { lng: coordinates[ 0 ], lat: coordinates[ 1 ] } )
+			selectLocation( { lng: coordinates[ 0 ], lat: coordinates[ 1 ] }, properties.id )
 		} )
 		brandButton?.addEventListener( "click", () => {
 			activePopup.remove()
@@ -650,9 +713,10 @@ export function createApp() {
 
 	action.addEventListener( "click", () => {
 		isSelecting = false
+		analyzeCompetition()
 		hidePanels()
 		report.classList.remove( "is-hidden" )
-		get( "#report-title" ).textContent = activeWorkflow === "find" ? "Top lokatsiyalar" : "Fast Food Fit"
+		get( "#report-title" ).textContent = activeWorkflow === "find" ? "Hudud raqobati" : "Raqobat tahlili"
 		get( "#report-location" ).textContent = `${ selectedPoint.lat.toFixed( 5 ) }, ${ selectedPoint.lng.toFixed( 5 ) } · ${ radius / 1000 } km`
 	} )
 }
