@@ -3,10 +3,9 @@ import {
 	ArrowLeftRight,
 	ArrowRight,
 	ChevronDown,
-	CircleDot,
+	Compass,
 	FileText,
 	HelpCircle,
-	House,
 	Layers3,
 	LocateFixed,
 	MapPin,
@@ -16,7 +15,6 @@ import {
 	Settings,
 	Store,
 	Target,
-	TrainFront,
 	UserRound,
 	X,
 	createIcons,
@@ -38,7 +36,7 @@ const workflows = {
 }
 
 const navItems = [
-	[ "overview", "house", "Asosiy" ],
+	[ "explore", "compass", "Explore" ],
 	[ "analyze", "map-pin", "Tahlil" ],
 	[ "find", "search", "Joy topish" ],
 	[ "reports", "file-text", "Hisobotlar" ],
@@ -62,7 +60,7 @@ const circleFeature = ( point, radius ) => {
 export function createApp() {
 	const root = document.querySelector( "#root" )
 	const navigation = navItems.map( ( [ id, icon, label ] ) => `
-		<button class="nav-item ${ id === "overview" ? "is-active" : "" }" type="button" data-view="${ id }">
+		<button class="nav-item ${ id === "explore" ? "is-active" : "" }" type="button" data-view="${ id }">
 			<span><i data-lucide="${ icon }"></i></span><b>${ label }</b>
 		</button>
 	` ).join( "" )
@@ -84,17 +82,6 @@ export function createApp() {
 		</aside>
 
 		<main class="map-workspace">
-			<section class="welcome-card" data-panel="overview">
-				<span class="eyebrow">FAST FOOD INTELLIGENCE</span>
-				<h1>Lokatsiyani taxmin bilan emas,<br><em>ma’lumot bilan</em> tanlang.</h1>
-				<p>Talab, transport, raqobat va auditoriya signallarini bitta xaritada tahlil qiling.</p>
-				<div class="welcome-actions">
-					<button class="primary-card" type="button" data-start="analyze"><span class="card-icon"><i data-lucide="map-pin"></i></span><span><strong>Joyni tahlil qilish</strong><small>Tanlangan nuqtaning biznes potensiali</small></span><b><i data-lucide="arrow-right"></i></b></button>
-					<button class="secondary-card" type="button" data-start="find"><span class="card-icon"><i data-lucide="search"></i></span><span><strong>Eng yaxshi joylarni topish</strong><small>Hudud bo‘yicha reytingli tavsiyalar</small></span><b><i data-lucide="arrow-right"></i></b></button>
-				</div>
-				<div class="capabilities"><span>7 ta biznes signali</span><span>2 km gacha tahlil</span><span>AI-ready scoring</span></div>
-			</section>
-
 			<section class="workflow-panel is-hidden" data-panel="workflow">
 				<div class="panel-top"><button class="back-button" type="button"><i data-lucide="arrow-left"></i></button><div><span class="eyebrow">YANGI TAHLIL</span><h2 id="workflow-title">Lokatsiyani belgilang</h2></div><button class="close-button" type="button"><i data-lucide="x"></i></button></div>
 				<p id="workflow-description">Xaritadan fast food ochmoqchi bo‘lgan aniq nuqtani tanlang.</p>
@@ -118,12 +105,11 @@ export function createApp() {
 
 			<div class="map-hint is-hidden"><span><i data-lucide="locate-fixed"></i></span> Xaritadan nuqtani tanlang</div>
 			<div class="map-tools"><button type="button" data-map-action="in" aria-label="Xaritani kattalashtirish"><i data-lucide="plus"></i></button><button type="button" data-map-action="out" aria-label="Xaritani kichraytirish"><i data-lucide="minus"></i></button></div>
-			<div class="layer-chips"><button type="button"><i data-lucide="circle-dot"></i> Traffic proxy</button><button type="button"><i data-lucide="store"></i> Raqobatchilar</button><button type="button"><i data-lucide="train-front"></i> Transport</button></div>
 		</main>
 	` )
 
 	createIcons( {
-		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, CircleDot, FileText, HelpCircle, House, Layers3, LocateFixed, MapPin, Minus, Plus, Search, Settings, Store, Target, TrainFront, UserRound, X },
+		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, Compass, FileText, HelpCircle, Layers3, LocateFixed, MapPin, Minus, Plus, Search, Settings, Store, Target, UserRound, X },
 		attrs: { "stroke-width": 1.8 },
 	} )
 
@@ -135,14 +121,14 @@ export function createApp() {
 	let isSelecting = false
 
 	const get = selector => root.querySelector( selector )
-	const overview = get( "[data-panel='overview']" )
 	const workflow = get( "[data-panel='workflow']" )
 	const report = get( "[data-panel='report']" )
 	const page = get( "[data-panel='page']" )
 	const hint = get( ".map-hint" )
 	const action = get( "#primary-action" )
+	let poiLayerLoaded = false
 
-	const hidePanels = () => [ overview, workflow, report, page ].forEach( panel => panel.classList.add( "is-hidden" ) )
+	const hidePanels = () => [ workflow, report, page ].forEach( panel => panel.classList.add( "is-hidden" ) )
 	const setActiveNav = view => root.querySelectorAll( ".nav-item" ).forEach( item => item.classList.toggle( "is-active", item.dataset.view === view ) )
 
 	const clearSelection = () => {
@@ -160,6 +146,18 @@ export function createApp() {
 		}
 	}
 
+	const selectLocation = point => {
+		selectedPoint = point
+		get( "#selected-location" ).textContent = `${ point.lat.toFixed( 5 ) }, ${ point.lng.toFixed( 5 ) }`
+		action.disabled = false
+		hint.classList.add( "is-hidden" )
+		if( marker ) {
+			marker.remove()
+		}
+		marker = new window.mapboxgl.Marker( { color: "#d7ff3f" } ).setLngLat( point ).addTo( map )
+		updateRadius()
+	}
+
 	const startWorkflow = mode => {
 		activeWorkflow = mode
 		const copy = workflows[ mode ]
@@ -172,13 +170,23 @@ export function createApp() {
 		isSelecting = true
 		hint.classList.remove( "is-hidden" )
 		setActiveNav( mode )
+		if( poiLayerLoaded ) {
+			setPoiLayerVisibility( "none" )
+		}
 	}
 
-	const showOverview = () => {
+	const showExplore = async() => {
 		hidePanels()
-		overview.classList.remove( "is-hidden" )
 		clearSelection()
-		setActiveNav( "overview" )
+		setActiveNav( "explore" )
+		if( map ) {
+			if( !poiLayerLoaded ) {
+				await loadPoiLayer()
+			}
+			else {
+				setPoiLayerVisibility( "visible" )
+			}
+		}
 	}
 
 	const pageData = {
@@ -199,11 +207,104 @@ export function createApp() {
 		createIcons( { icons: { Target }, attrs: { "stroke-width": 1.8 } } )
 		clearSelection()
 		setActiveNav( view )
+		if( poiLayerLoaded ) {
+			setPoiLayerVisibility( "none" )
+		}
 	}
 
 	const updateRadius = () => {
 		if( map && selectedPoint && map.getSource( "selection-radius" ) ) {
 			map.getSource( "selection-radius" ).setData( circleFeature( selectedPoint, radius ) )
+		}
+	}
+
+	const setPoiLayerVisibility = visibility => {
+		[ "fast-food-heatmap", "fast-food-points" ].forEach( layerId => {
+			if( map.getLayer( layerId ) ) {
+				map.setLayoutProperty( layerId, "visibility", visibility )
+			}
+		} )
+	}
+
+	const loadPoiLayer = async() => {
+		try {
+			const response = await fetch( "/data/fast-food-final.geojson" )
+			if( !response.ok ) {
+				throw new Error( `POI data request failed: ${ response.status }` )
+			}
+
+			const data = await response.json()
+			map.addSource( "fast-food-poi", {
+				type: "geojson",
+				data,
+			} )
+			map.addLayer( {
+				id: "fast-food-heatmap",
+				type: "heatmap",
+				source: "fast-food-poi",
+				maxzoom: 14,
+				paint: {
+					"heatmap-weight": [ "interpolate", [ "linear" ], [ "get", "confidence" ], 0.5, 0.3, 1, 0.75 ],
+					"heatmap-intensity": [ "interpolate", [ "linear" ], [ "zoom" ], 8, 0.28, 13, 0.8 ],
+					"heatmap-color": [
+						"interpolate", [ "linear" ], [ "heatmap-density" ],
+						0, "rgba(10, 14, 12, 0)",
+						0.2, "rgba(89, 122, 52, 0.18)",
+						0.45, "rgba(174, 215, 63, 0.38)",
+						0.7, "rgba(215, 255, 63, 0.58)",
+						0.88, "rgba(255, 185, 74, 0.7)",
+						1, "rgba(255, 113, 76, 0.78)",
+					],
+					"heatmap-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 8, 8, 13, 20 ],
+					"heatmap-opacity": [ "interpolate", [ "linear" ], [ "zoom" ], 8, 0.72, 11, 0.68, 14, 0 ],
+				},
+			} )
+			map.addLayer( {
+				id: "fast-food-points",
+				type: "circle",
+				source: "fast-food-poi",
+				minzoom: 11.5,
+				paint: {
+					"circle-color": [ "match", [ "get", "subtype" ], "burger", "#ff9f43", "pizza", "#ff6b6b", "doner_kebab", "#feca57", "chicken", "#ff7f50", "#d7ff3f" ],
+					"circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 11.5, 2.5, 15, 6.5 ],
+					"circle-opacity": [ "interpolate", [ "linear" ], [ "zoom" ], 11.5, 0, 13, 0.9 ],
+					"circle-stroke-color": "#111509",
+					"circle-stroke-width": [ "interpolate", [ "linear" ], [ "zoom" ], 12, 0.5, 15, 1.5 ],
+				},
+			} )
+
+			map.on( "click", "fast-food-points", event => {
+				const properties = event.features[ 0 ].properties
+				const confidence = Math.round( Number( properties.confidence ) * 100 )
+				const coordinates = [ ...event.features[ 0 ].geometry.coordinates ]
+				const content = document.createElement( "div" )
+				const label = document.createElement( "span" )
+				const name = document.createElement( "strong" )
+				const details = document.createElement( "small" )
+				const analyzeButton = document.createElement( "button" )
+				label.textContent = "FAST FOOD POI"
+				name.textContent = properties.name
+				details.textContent = `${ properties.subtype.replaceAll( "_", " " ) } · ${ confidence }% confidence`
+				analyzeButton.textContent = "Shu joyni tahlil qilish"
+				content.append( label, name, details, analyzeButton )
+
+				const popup = new window.mapboxgl.Popup( { closeButton: false, offset: 12, className: "poi-popup" } )
+					.setLngLat( coordinates )
+					.setDOMContent( content )
+					.addTo( map )
+				analyzeButton.addEventListener( "click", () => {
+					popup.remove()
+					startWorkflow( "analyze" )
+					selectLocation( { lng: coordinates[ 0 ], lat: coordinates[ 1 ] } )
+				} )
+			} )
+			map.on( "mouseenter", "fast-food-points", () => map.getCanvas().style.cursor = "pointer" )
+			map.on( "mouseleave", "fast-food-points", () => map.getCanvas().style.cursor = "default" )
+			poiLayerLoaded = true
+			setPoiLayerVisibility( "visible" )
+		}
+		catch( error ) {
+			console.error( error )
 		}
 	}
 
@@ -216,22 +317,14 @@ export function createApp() {
 			if( !isSelecting ) {
 				return
 			}
-			selectedPoint = event.lngLat
-			get( "#selected-location" ).textContent = `${ selectedPoint.lat.toFixed( 5 ) }, ${ selectedPoint.lng.toFixed( 5 ) }`
-			action.disabled = false
-			hint.classList.add( "is-hidden" )
-			if( marker ) {
-				marker.remove()
-			}
-			marker = new window.mapboxgl.Marker( { color: "#d7ff3f" } ).setLngLat( selectedPoint ).addTo( map )
-			updateRadius()
+			selectLocation( event.lngLat )
 		} )
+		loadPoiLayer()
 	} )
 
-	root.querySelectorAll( "[data-start]" ).forEach( button => button.addEventListener( "click", () => startWorkflow( button.dataset.start ) ) )
 	root.querySelectorAll( ".nav-item" ).forEach( button => button.addEventListener( "click", () => {
-		if( button.dataset.view === "overview" ) {
-			showOverview()
+		if( button.dataset.view === "explore" ) {
+			showExplore()
 		}
 		else if( [ "analyze", "find" ].includes( button.dataset.view ) ) {
 			startWorkflow( button.dataset.view )
@@ -240,10 +333,10 @@ export function createApp() {
 			showPage( button.dataset.view )
 		}
 	} ) )
-	get( ".back-button" ).addEventListener( "click", showOverview )
-	get( ".close-button" ).addEventListener( "click", showOverview )
-	get( ".close-report" ).addEventListener( "click", showOverview )
-	get( ".close-page" ).addEventListener( "click", showOverview )
+	get( ".back-button" ).addEventListener( "click", showExplore )
+	get( ".close-button" ).addEventListener( "click", showExplore )
+	get( ".close-report" ).addEventListener( "click", showExplore )
+	get( ".close-page" ).addEventListener( "click", showExplore )
 
 	root.querySelectorAll( "[data-control='radius'] button" ).forEach( button => button.addEventListener( "click", () => {
 		radius = Number( button.dataset.value )
