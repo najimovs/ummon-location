@@ -69,7 +69,7 @@ export function createApp() {
 		<header class="topbar">
 			<a class="brand" href="#" aria-label="Ummon Location"><span class="brand-mark"><img src="/logo.png" alt=""></span><span><strong>Ummon</strong><small>Location Intelligence</small></span></a>
 			<button class="city-selector" type="button"><i class="status-dot"></i>Toshkent <i data-lucide="chevron-down"></i></button>
-			<div class="map-search"><span><i data-lucide="search"></i></span><input type="search" placeholder="Manzil yoki hududni qidiring" aria-label="Manzil qidirish"><kbd>⌘ K</kbd></div>
+			<div class="map-search"><span><i data-lucide="search"></i></span><input type="search" placeholder="Fast food yoki manzilni qidiring" aria-label="Fast food qidirish" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-results"><kbd>⌘ K</kbd><div class="search-results" id="search-results" role="listbox" hidden></div></div>
 			<div class="top-actions"><button type="button" aria-label="Yordam"><i data-lucide="help-circle"></i></button><button type="button" aria-label="Profil"><i data-lucide="user-round"></i></button></div>
 		</header>
 
@@ -120,6 +120,11 @@ export function createApp() {
 	let selectedPoint
 	let activeWorkflow
 	let isSelecting = false
+	let poiFeatures = []
+	let searchResults = []
+	let activeSearchIndex = -1
+	let activePopup
+	let activePoiId
 
 	const get = selector => root.querySelector( selector )
 	const workflow = get( "[data-panel='workflow']" )
@@ -127,6 +132,8 @@ export function createApp() {
 	const page = get( "[data-panel='page']" )
 	const hint = get( ".map-hint" )
 	const action = get( "#primary-action" )
+	const searchInput = get( ".map-search input" )
+	const searchPanel = get( ".search-results" )
 	let poiLayerLoaded = false
 
 	const hidePanels = () => [ workflow, report, page ].forEach( panel => panel.classList.add( "is-hidden" ) )
@@ -220,11 +227,151 @@ export function createApp() {
 	}
 
 	const setPoiLayerVisibility = visibility => {
-		[ "fast-food-heatmap", "fast-food-point-glow", "fast-food-points" ].forEach( layerId => {
+		[ "fast-food-heatmap", "fast-food-point-glow", "fast-food-points", "fast-food-selected-glow", "fast-food-selected-point" ].forEach( layerId => {
 			if( map.getLayer( layerId ) ) {
 				map.setLayoutProperty( layerId, "visibility", visibility )
 			}
 		} )
+	}
+
+	const cleanName = value => String( value || "Nomsiz fast food" ).replace( /^"+|"+$/g, "" )
+	const normalizeSearch = value => String( value || "" ).toLocaleLowerCase( "uz" ).replace( /[’'`]/g, "" ).replace( /[^\p{L}\p{N}]+/gu, " " ).trim()
+	const clearActivePoi = () => {
+		if( activePoiId && map?.getSource( "fast-food-poi" ) ) {
+			map.setFeatureState( { source: "fast-food-poi", id: activePoiId }, { selected: false } )
+		}
+		activePoiId = null
+	}
+
+	const createPoiPopup = ( properties, coordinates ) => {
+		if( activePopup ) {
+			activePopup.remove()
+		}
+		clearActivePoi()
+		activePoiId = properties.id
+		if( activePoiId ) {
+			map.setFeatureState( { source: "fast-food-poi", id: activePoiId }, { selected: true } )
+		}
+		const confidence = Math.round( Number( properties.confidence ) * 100 )
+		const content = document.createElement( "div" )
+		const header = document.createElement( "div" )
+		const label = document.createElement( "span" )
+		const name = document.createElement( "strong" )
+		const details = document.createElement( "small" )
+		const meta = document.createElement( "div" )
+		const coordinate = document.createElement( "p" )
+		const analyzeButton = document.createElement( "button" )
+		header.className = "poi-popup__header"
+		label.className = "poi-popup__label"
+		name.className = "poi-popup__name"
+		details.className = "poi-popup__type"
+		meta.className = "poi-popup__meta"
+		coordinate.className = "poi-popup__coordinate"
+		analyzeButton.className = "poi-popup__action"
+		label.textContent = "Fast food nuqtasi"
+		name.textContent = cleanName( properties.name )
+		details.textContent = String( properties.subtype || "fast food" ).replaceAll( "_", " " )
+		meta.textContent = `Ma’lumot ishonchliligi: ${ Number.isFinite( confidence ) ? confidence : "—" }%`
+		coordinate.textContent = `${ coordinates[ 1 ].toFixed( 5 ) }, ${ coordinates[ 0 ].toFixed( 5 ) }`
+		analyzeButton.textContent = "Shu lokatsiyani tahlil qilish"
+		header.append( label, details )
+		content.append( header, name, meta, coordinate, analyzeButton )
+
+		activePopup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: true, offset: 18, maxWidth: "340px", className: "poi-popup" } )
+			.setLngLat( coordinates )
+			.setDOMContent( content )
+			.addTo( map )
+		const popupPoiId = activePoiId
+		activePopup.on( "close", () => {
+			if( activePoiId === popupPoiId ) {
+				clearActivePoi()
+				activePopup = null
+			}
+		} )
+		analyzeButton.addEventListener( "click", () => {
+			activePopup.remove()
+			startWorkflow( "analyze" )
+			selectLocation( { lng: coordinates[ 0 ], lat: coordinates[ 1 ] } )
+		} )
+	}
+
+	const closeSearch = () => {
+		searchPanel.hidden = true
+		searchInput.setAttribute( "aria-expanded", "false" )
+		activeSearchIndex = -1
+	}
+
+	const selectSearchResult = feature => {
+		const coordinates = feature.geometry.coordinates
+		closeSearch()
+		searchInput.value = cleanName( feature.properties.name )
+		hidePanels()
+		clearSelection()
+		setActiveNav( "explore" )
+		setPoiLayerVisibility( "visible" )
+		map.easeTo( { center: coordinates, zoom: 15, duration: 900 } )
+		createPoiPopup( feature.properties, coordinates )
+	}
+
+	const renderSearchResults = query => {
+		const normalizedQuery = normalizeSearch( query )
+		searchPanel.replaceChildren()
+		if( normalizedQuery.length < 2 ) {
+			closeSearch()
+			return
+		}
+
+		searchResults = poiFeatures
+			.map( feature => {
+				const properties = feature.properties
+				const name = normalizeSearch( properties.name )
+				const brand = normalizeSearch( properties.brand )
+				const address = normalizeSearch( properties.address )
+				const subtype = normalizeSearch( properties.subtype )
+				const aliases = normalizeSearch( Array.isArray( properties.aliases ) ? properties.aliases.join( " " ) : properties.aliases )
+				const searchable = `${ name } ${ brand } ${ address } ${ subtype } ${ aliases }`
+				if( !searchable.includes( normalizedQuery ) ) {
+					return null
+				}
+				const score = name === normalizedQuery ? 0 : name.startsWith( normalizedQuery ) ? 1 : name.includes( normalizedQuery ) ? 2 : address.startsWith( normalizedQuery ) ? 3 : 4
+				return { feature, score }
+			} )
+			.filter( Boolean )
+			.sort( ( first, second ) => first.score - second.score )
+			.slice( 0, 8 )
+			.map( result => result.feature )
+
+		if( searchResults.length === 0 ) {
+			const empty = document.createElement( "p" )
+			empty.className = "search-empty"
+			empty.textContent = "Mos fast food topilmadi"
+			searchPanel.append( empty )
+		}
+		else {
+			searchResults.forEach( ( feature, index ) => {
+				const button = document.createElement( "button" )
+				const icon = document.createElement( "span" )
+				const copy = document.createElement( "span" )
+				const name = document.createElement( "strong" )
+				const meta = document.createElement( "small" )
+				button.type = "button"
+				button.role = "option"
+				button.dataset.searchIndex = index
+				icon.className = "search-result__icon"
+				icon.textContent = "●"
+				copy.className = "search-result__copy"
+				name.textContent = cleanName( feature.properties.name )
+				meta.textContent = [ feature.properties.address, String( feature.properties.subtype || "" ).replaceAll( "_", " " ) ].filter( Boolean ).join( " · " )
+				copy.append( name, meta )
+				button.append( icon, copy )
+				button.addEventListener( "mousedown", event => event.preventDefault() )
+				button.addEventListener( "click", () => selectSearchResult( feature ) )
+				searchPanel.append( button )
+			} )
+		}
+		activeSearchIndex = -1
+		searchPanel.hidden = false
+		searchInput.setAttribute( "aria-expanded", "true" )
 	}
 
 	const loadPoiLayer = async() => {
@@ -235,9 +382,14 @@ export function createApp() {
 			}
 
 			const data = await response.json()
+			poiFeatures = data.features
+			if( searchInput.value.trim().length >= 2 ) {
+				renderSearchResults( searchInput.value )
+			}
 			map.addSource( "fast-food-poi", {
 				type: "geojson",
 				data,
+				promoteId: "id",
 			} )
 			map.addLayer( {
 				id: "fast-food-heatmap",
@@ -287,44 +439,37 @@ export function createApp() {
 					"circle-emissive-strength": 1.6,
 				},
 			} )
+			map.addLayer( {
+				id: "fast-food-selected-glow",
+				type: "circle",
+				source: "fast-food-poi",
+				paint: {
+					"circle-color": "#1c91ff",
+					"circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 19, 15, 30 ],
+					"circle-blur": 0.7,
+					"circle-opacity": [ "case", [ "boolean", [ "feature-state", "selected" ], false ], 0.82, 0 ],
+					"circle-emissive-strength": 3,
+				},
+			} )
+			map.addLayer( {
+				id: "fast-food-selected-point",
+				type: "circle",
+				source: "fast-food-poi",
+				paint: {
+					"circle-color": "#f4fbff",
+					"circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 7, 15, 12 ],
+					"circle-opacity": [ "case", [ "boolean", [ "feature-state", "selected" ], false ], 1, 0 ],
+					"circle-stroke-color": "#168cff",
+					"circle-stroke-width": 4,
+					"circle-stroke-opacity": [ "case", [ "boolean", [ "feature-state", "selected" ], false ], 1, 0 ],
+					"circle-emissive-strength": 2.5,
+				},
+			} )
 
 			map.on( "click", "fast-food-points", event => {
 				const properties = event.features[ 0 ].properties
-				const confidence = Math.round( Number( properties.confidence ) * 100 )
 				const coordinates = [ ...event.features[ 0 ].geometry.coordinates ]
-				const content = document.createElement( "div" )
-				const header = document.createElement( "div" )
-				const label = document.createElement( "span" )
-				const name = document.createElement( "strong" )
-				const details = document.createElement( "small" )
-				const meta = document.createElement( "div" )
-				const coordinate = document.createElement( "p" )
-				const analyzeButton = document.createElement( "button" )
-				header.className = "poi-popup__header"
-				label.className = "poi-popup__label"
-				name.className = "poi-popup__name"
-				details.className = "poi-popup__type"
-				meta.className = "poi-popup__meta"
-				coordinate.className = "poi-popup__coordinate"
-				analyzeButton.className = "poi-popup__action"
-				label.textContent = "Fast food nuqtasi"
-				name.textContent = properties.name || "Nomsiz fast food"
-				details.textContent = properties.subtype.replaceAll( "_", " " )
-				meta.textContent = `Ma’lumot ishonchliligi: ${ confidence }%`
-				coordinate.textContent = `${ coordinates[ 1 ].toFixed( 5 ) }, ${ coordinates[ 0 ].toFixed( 5 ) }`
-				analyzeButton.textContent = "Shu lokatsiyani tahlil qilish"
-				header.append( label, details )
-				content.append( header, name, meta, coordinate, analyzeButton )
-
-				const popup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: true, offset: 18, maxWidth: "340px", className: "poi-popup" } )
-					.setLngLat( coordinates )
-					.setDOMContent( content )
-					.addTo( map )
-				analyzeButton.addEventListener( "click", () => {
-					popup.remove()
-					startWorkflow( "analyze" )
-					selectLocation( { lng: coordinates[ 0 ], lat: coordinates[ 1 ] } )
-				} )
+				createPoiPopup( properties, coordinates )
 			} )
 			map.on( "mouseenter", "fast-food-points", () => map.getCanvas().style.cursor = "pointer" )
 			map.on( "mouseleave", "fast-food-points", () => map.getCanvas().style.cursor = "default" )
@@ -349,6 +494,45 @@ export function createApp() {
 			selectLocation( event.lngLat )
 		} )
 		loadPoiLayer()
+	} )
+
+	searchInput.addEventListener( "input", () => renderSearchResults( searchInput.value ) )
+	searchInput.addEventListener( "focus", () => {
+		if( searchInput.value.trim().length >= 2 ) {
+			renderSearchResults( searchInput.value )
+		}
+	} )
+	searchInput.addEventListener( "keydown", event => {
+		if( event.key === "Escape" ) {
+			closeSearch()
+			searchInput.blur()
+			return
+		}
+		if( ![ "ArrowDown", "ArrowUp", "Enter" ].includes( event.key ) || searchResults.length === 0 ) {
+			return
+		}
+		event.preventDefault()
+		if( event.key === "Enter" ) {
+			selectSearchResult( searchResults[ activeSearchIndex < 0 ? 0 : activeSearchIndex ] )
+			return
+		}
+		const direction = event.key === "ArrowDown" ? 1 : -1
+		activeSearchIndex = ( activeSearchIndex + direction + searchResults.length ) % searchResults.length
+		searchPanel.querySelectorAll( "button" ).forEach( ( button, index ) => {
+			button.classList.toggle( "is-active", index === activeSearchIndex )
+			button.setAttribute( "aria-selected", String( index === activeSearchIndex ) )
+		} )
+	} )
+	document.addEventListener( "click", event => {
+		if( !get( ".map-search" ).contains( event.target ) ) {
+			closeSearch()
+		}
+	} )
+	document.addEventListener( "keydown", event => {
+		if( ( event.metaKey || event.ctrlKey ) && event.key.toLowerCase() === "k" ) {
+			event.preventDefault()
+			searchInput.focus()
+		}
 	} )
 
 	root.querySelectorAll( ".nav-item" ).forEach( button => button.addEventListener( "click", () => {
