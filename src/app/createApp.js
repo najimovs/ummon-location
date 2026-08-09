@@ -4,17 +4,10 @@ import {
 	ArrowRight,
 	ChevronDown,
 	FileText,
-	HelpCircle,
 	Layers3,
 	LocateFixed,
 	MapPin,
-	Minus,
-	Plus,
 	Search,
-	Settings,
-	Store,
-	Target,
-	UserRound,
 	X,
 	createIcons,
 } from "lucide"
@@ -50,27 +43,37 @@ const navItems = [
 ]
 
 const defaultLayerSettings = {
-	fastFoodPoints: true,
-	fastFoodHeatmap: true,
-	metro: true,
+	fastFoodPoints: false,
+	fastFoodHeatmap: false,
+	metro: false,
 	transitStops: false,
 	demandGenerators: false,
 	roadFlow: false,
 	serviceAreas: true,
-	districts: true,
+	districts: false,
 	opportunityMap: true,
 	placeLabels: true,
 	roadLabels: true,
 	poiLabels: false,
-	transitLabels: true,
+	transitLabels: false,
 	objects3d: false,
 }
 
+const layerSettingsVersion = 2
+
 const readLayerSettings = () => {
 	try {
-		return { ...defaultLayerSettings, ...JSON.parse( localStorage.getItem( "ummon-layer-settings" ) || "{}" ) }
+		const savedSettings = JSON.parse( localStorage.getItem( "ummon-layer-settings" ) || "{}" )
+		if( Number( localStorage.getItem( "ummon-layer-settings-version" ) || 0 ) < layerSettingsVersion ) {
+			const migratedSettings = { ...savedSettings, fastFoodPoints: false, fastFoodHeatmap: false, metro: false, transitStops: false, demandGenerators: false, roadFlow: false, districts: false, transitLabels: false, objects3d: false }
+			localStorage.setItem( "ummon-layer-settings", JSON.stringify( migratedSettings ) )
+			localStorage.setItem( "ummon-layer-settings-version", String( layerSettingsVersion ) )
+			return { ...defaultLayerSettings, ...migratedSettings }
+		}
+		return { ...defaultLayerSettings, ...savedSettings }
 	}
 	catch {
+		localStorage.setItem( "ummon-layer-settings-version", String( layerSettingsVersion ) )
 		return { ...defaultLayerSettings }
 	}
 }
@@ -125,15 +128,11 @@ export function createApp() {
 					<footer>Tanlovlar ushbu qurilmada saqlanadi</footer>
 				</section>
 			</div>
-			<div class="top-actions"><button type="button" aria-label="Yordam"><i data-lucide="help-circle"></i></button><button type="button" aria-label="Profil"><i data-lucide="user-round"></i></button></div>
 		</header>
 
 		<aside class="sidebar">
 			<span class="nav-label">Workspace</span>
 			<nav>${ navigation }</nav>
-			<div class="sidebar-bottom">
-				<button class="nav-item" type="button" data-view="settings"><span><i data-lucide="settings"></i></span><b>Sozlamalar</b></button>
-			</div>
 		</aside>
 
 		<main class="map-workspace">
@@ -144,7 +143,6 @@ export function createApp() {
 				<div class="compare-picker is-hidden"><button type="button" data-compare-slot="a"><span>A</span><div><small>BIRINCHI JOY</small><strong id="compare-location-a">Xaritadan tanlang</strong></div></button><button type="button" data-compare-slot="b"><span>B</span><div><small>IKKINCHI JOY</small><strong id="compare-location-b">Xaritadan tanlang</strong></div></button><p id="compare-picker-help">Avval A lokatsiyani xaritadan belgilang.</p></div>
 				<fieldset class="district-field is-hidden"><legend>Tumanni tanlang</legend><label class="select-wrap"><span><i data-lucide="map-pin"></i></span><select id="district-select"><option value="">Tuman tanlanmagan</option></select></label></fieldset>
 				<fieldset><legend>2 &nbsp; Tahlil radiusi</legend><div class="segments" data-control="radius"><button type="button" data-value="500">500 m</button><button class="is-active" type="button" data-value="1000">1 km</button><button type="button" data-value="2000">2 km</button></div></fieldset>
-				<fieldset><legend>3 &nbsp; Fast food formati</legend><label class="select-wrap"><span><i data-lucide="store"></i></span><select><option>Universal fast food</option><option>Student / budget</option><option>Family fast food</option><option>Delivery-first</option><option>Roadside</option></select></label></fieldset>
 				<button class="primary-action" id="primary-action" type="button" disabled><span>Tahlilni boshlash</span><b><i data-lucide="arrow-right"></i></b></button>
 			</section>
 
@@ -182,13 +180,11 @@ export function createApp() {
 			<div class="brand-filter is-hidden"><span><small>TARMOQ FILTRI</small><strong id="brand-filter-name">EVOS</strong><b id="brand-filter-count">0 ta filial</b></span><button type="button" aria-label="Tarmoq filtrini yopish"><i data-lucide="x"></i></button></div>
 			<div class="territory-legend is-hidden"><header><strong>Xizmat hududi xaritasi</strong><button class="territory-legend-toggle" type="button" aria-label="Xizmat hududi izohini yig‘ish" aria-expanded="true"><i data-lucide="chevron-down"></i></button></header><div class="territory-legend-content"><p><i class="is-candidate"></i><span><b>Yangi lokatsiya</b>Sizning nuqtangiz eng yaqin bo‘lgan hudud</span></p><p><i class="is-competitor"></i><span><b>Raqib hududlari</b>Boshqa fast-food’lar yaqinroq bo‘lgan joylar</span></p><p><i class="is-generator"></i><span><b>Hudud markazi</b>Hududni yaratgan haqiqiy fast-food nuqtasi</span></p><p><i class="is-radius"></i><span><b>Tahlil chegarasi</b>Siz tanlagan radius doirasi</span></p></div></div>
 			<div class="district-legend is-hidden"><strong id="map-score-legend">Joy imkoniyati</strong><p id="map-score-description">Har bir kichik hududda yangi fast-food ochish alohida hisoblangan.</p><i></i><span><small id="map-score-low">Past</small><small id="map-score-high">Yuqori</small></span></div>
-			<a class="osm-attribution is-hidden" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
-			<div class="map-tools"><button type="button" data-map-action="in" aria-label="Xaritani kattalashtirish"><i data-lucide="plus"></i></button><button type="button" data-map-action="out" aria-label="Xaritani kichraytirish"><i data-lucide="minus"></i></button></div>
 		</main>
 	` )
 
 	createIcons( {
-		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, FileText, HelpCircle, Layers3, LocateFixed, MapPin, Minus, Plus, Search, Settings, Store, Target, UserRound, X },
+		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, FileText, Layers3, LocateFixed, MapPin, Search, X },
 		attrs: { "stroke-width": 1.8 },
 	} )
 
@@ -245,11 +241,7 @@ export function createApp() {
 	const districtLegend = get( ".district-legend" )
 	const layersToggle = get( ".layers-toggle" )
 	const layersPanel = get( ".layers-panel" )
-	const osmAttribution = get( ".osm-attribution" )
 	let poiLayerLoaded = false
-	let metroLayerLoaded = false
-	let transitLayerLoaded = false
-	let roadLayerLoaded = false
 	let metroLayerPromise
 	let transitLayerPromise
 	let demandLayerPromise
@@ -364,10 +356,7 @@ export function createApp() {
 		action.querySelector( "span" ).textContent = copy.action
 		clearSelection()
 		if( mode === "find" ) {
-			layerSettings.districts = true
-			saveLayerSettings()
-			syncLayerControls()
-			applyCustomLayerSettings()
+			enterFocusMode( "district", "Barcha qatlamlarni qaytarish" )
 		}
 		get( ".district-field" ).classList.toggle( "is-hidden", mode !== "find" )
 		get( ".step" ).classList.toggle( "is-hidden", mode === "find" || mode === "compare" )
@@ -403,8 +392,6 @@ export function createApp() {
 
 	const pageData = {
 		reports: [ "HISOBOTLAR", "Mening hisobotlarim", "Saqlangan lokatsiya tahlillari shu yerda jamlanadi.", "Hali hisobot yo‘q", "Birinchi lokatsiyani tahlil qilganingizdan so‘ng hisobot shu yerda ko‘rinadi." ],
-		compare: [ "SOLISHTIRISH", "Lokatsiyalarni taqqoslash", "Ikki yoki undan ortiq lokatsiyaning biznes signallarini yonma-yon solishtiring.", "Taqqoslash ro‘yxati bo‘sh", "Hisobotlardan lokatsiyalarni tanlab bu yerga qo‘shish mumkin bo‘ladi." ],
-		settings: [ "SOZLAMALAR", "Mahsulot sozlamalari", "Standart radius, til va xarita ko‘rinishini boshqaring.", "Sozlamalar tez orada", "MVP davomida asosiy parametrlar shu bo‘limga qo‘shiladi." ],
 	}
 	const reportsStorageKey = "ummon-analysis-reports"
 	const readSavedReports = () => {
@@ -476,13 +463,7 @@ export function createApp() {
 		get( "#page-eyebrow" ).textContent = data[ 0 ]
 		get( "#page-title" ).textContent = data[ 1 ]
 		get( "#page-description" ).textContent = data[ 2 ]
-		if( view === "reports" ) {
-			renderSavedReports()
-		}
-		else {
-			get( "#page-content" ).innerHTML = `<div class="empty-state"><span><i data-lucide="target"></i></span><strong>${ data[ 3 ] }</strong><p>${ data[ 4 ] }</p></div>`
-			createIcons( { icons: { Target }, attrs: { "stroke-width": 1.8 } } )
-		}
+		renderSavedReports()
 		clearSelection()
 		setActiveNav( view )
 		if( poiLayerLoaded ) {
@@ -613,7 +594,6 @@ export function createApp() {
 		setLayerVisibility( [ "h3-opportunity-fill", "h3-opportunity-line" ], layerSettings.opportunityMap && opportunityFeatures.length > 0 )
 		territoryLegend.classList.toggle( "is-hidden", !layerSettings.serviceAreas || territoryFeatures.length === 0 )
 		districtLegend.classList.toggle( "is-hidden", !layerSettings.opportunityMap || opportunityFeatures.length === 0 || territoryFeatures.length > 0 )
-		osmAttribution.classList.toggle( "is-hidden", !( layerSettings.metro && metroLayerLoaded ) && !( layerSettings.transitStops && transitLayerLoaded ) && !( layerSettings.roadFlow && roadLayerLoaded ) )
 		applyFocusMode()
 	}
 	const syncLayerControls = () => get( ".layers-panel" ).querySelectorAll( "[data-layer-setting]" ).forEach( button => {
@@ -1610,7 +1590,6 @@ export function createApp() {
 			transitFeatures = data.features
 			buildTransitSpatialIndex( transitFeatures )
 			map.getSource( "transit-stops" ).setData( data )
-			transitLayerLoaded = true
 			applyCustomLayerSettings()
 		}
 		catch( error ) {
@@ -1660,7 +1639,6 @@ export function createApp() {
 			roadFeatures = data.features
 			buildRoadSpatialIndex( roadFeatures )
 			map.getSource( "road-flow" ).setData( data )
-			roadLayerLoaded = true
 			applyCustomLayerSettings()
 		}
 		catch( error ) {
@@ -1681,7 +1659,6 @@ export function createApp() {
 			metroFeatures = stations.features
 			map.getSource( "metro-stations" ).setData( stations )
 			map.getSource( "metro-entrances" ).setData( entrances )
-			metroLayerLoaded = true
 			applyCustomLayerSettings()
 		}
 		catch( error ) {
@@ -2085,21 +2062,11 @@ export function createApp() {
 		updateRadius()
 	} ) )
 
-	root.querySelectorAll( "[data-map-action]" ).forEach( button => button.addEventListener( "click", () => {
-		if( map ) {
-			map[ button.dataset.mapAction === "in" ? "zoomIn" : "zoomOut" ]()
-		}
-	} ) )
-
 	action.addEventListener( "click", async() => {
 		isSelecting = false
 		await Promise.all( [ metroLayerPromise, transitLayerPromise, demandLayerPromise, roadLayerPromise ].filter( Boolean ) )
 		closeLayerPanel()
 		hidePanels()
-		layerSettings.metro = true
-		layerSettings.transitStops = true
-		layerSettings.roadFlow = true
-		saveLayerSettings()
 		syncLayerControls()
 		if( activeWorkflow === "compare" ) {
 			territoryLegend.classList.add( "is-hidden" )
@@ -2135,9 +2102,6 @@ export function createApp() {
 			} )
 		}
 		else {
-			layerSettings.serviceAreas = true
-			saveLayerSettings()
-			syncLayerControls()
 			const result = analyzeCompetition()
 			analysisFocusPoiIds = result.poiIds
 			enterFocusMode( "analysis", "Barcha qatlamlarni qaytarish" )
