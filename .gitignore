@@ -3,6 +3,7 @@
 dist
 node_modules
 public/poi/
+public/data/extras/
 data/poi-inventory.json
 data/fast-food-normalized.geojson
 data/fast-food-deduplication-audit.json

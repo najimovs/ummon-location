@@ -2,6 +2,7 @@ import {
 	ArrowLeft,
 	ArrowLeftRight,
 	ArrowRight,
+	ChevronDown,
 	FileText,
 	HelpCircle,
 	Layers3,
@@ -18,7 +19,7 @@ import {
 	createIcons,
 } from "lucide"
 import { cellToBoundary, cellToLatLng, polygonToCells } from "h3-js"
-import { area, bbox, booleanPointInPolygon, circle, featureCollection, intersect, point, voronoi } from "@turf/turf"
+import { area, bbox, booleanPointInPolygon, circle, featureCollection, intersect, point, pointToLineDistance, voronoi } from "@turf/turf"
 
 const workflows = {
 	analyze: {
@@ -145,7 +146,8 @@ export function createApp() {
 				<div class="metric-grid analysis-only"><article><span>Raqobatchilar</span><strong id="competitor-count">—</strong></article><article><span>Tarmoq brendlari</span><strong id="brand-count">—</strong></article><article><span>Eng yaqin raqib</span><strong id="nearest-distance">—</strong></article><article><span>Yetakchi brend</span><strong id="dominant-brand">—</strong></article></div>
 				<div class="metro-analysis analysis-only"><div><span>METRO QULAYLIGI</span><strong id="metro-access-score">—</strong></div><div><p><small>Eng yaqin bekat</small><b id="nearest-metro-name">—</b><em id="nearest-metro-distance">—</em></p><p><small>Radius ichida</small><b id="metro-count">—</b><em>metro bekati</em></p></div><p id="metro-insight">Metro ma’lumoti yuklanmoqda…</p></div>
 				<div class="demand-analysis analysis-only"><div><span>TALAB OQIMI POTENSIALI</span><strong id="demand-access-score">—</strong></div><div><p><small>Radius ichida</small><b id="demand-nearby-count">—</b><em>talab generatori</em></p><p><small>Kuchli auditoriya</small><b id="demand-leading-category">—</b><em id="demand-strongest-place">—</em></p></div><p id="demand-insight">Talab generatorlari hisoblanmoqda…</p></div>
-				<div class="find-results"><div class="district-summary"><span>MIJOZ TANLOVI SIMULYATSIYASI</span><strong id="find-district-name">—</strong><p id="find-district-summary">Hisoblanmoqda…</p><div><b id="find-population">—</b><small>Aholi</small><b id="find-density">—</b><small>odam/km²</small><b id="find-pois">—</b><small>Fast-food</small></div></div><div class="simulation-explainer"><strong>Simulyatsiyada nima sodir bo‘ladi?</strong><div><span>1</span><p><b>Hudud bo‘linadi</b>Tuman kichik olti burchakli qismlarga ajratiladi.</p></div><div><span>2</span><p><b>Har bir joy sinab ko‘riladi</b>Shu yerda yangi fast-food ochilsa, odamlar uni tanlash ehtimoli hisoblanadi.</p></div><div><span>3</span><p><b>Eng kuchli joylar saralanadi</b>Mijoz salohiyati, talab generatorlari va metro birgalikda solishtiriladi.</p></div></div><div class="huff-view"><div><button class="is-active" type="button" data-huff-view="opportunity">Eng yaxshi joylar</button><button type="button" data-huff-view="capture" disabled>Tanlangan joy ta’siri</button></div><p id="huff-view-note">Xaritadagi yorqin hududlar yangi fast-food uchun kuchliroq imkoniyatni bildiradi.</p></div><div class="candidate-impact is-hidden" id="candidate-impact"><span>TANLANGAN JOY NATIJASI</span><strong id="impact-score">—</strong><div><p><small>Bozor ulushi</small><b id="impact-share">—</b></p><p><small>Taxminiy mijozlar</small><b id="impact-population">—</b></p><p><small>Eng yaqin raqib</small><b id="impact-nearest">—</b></p></div><p id="impact-brands">Joy tanlanganda uning raqiblarga taxminiy ta’siri ko‘rsatiladi.</p></div><div class="candidate-list" id="candidate-list"></div><p class="model-note"><b>Ball formulasi:</b> 55% mijoz salohiyati + 25% talab oqimi + 20% metro qulayligi. Talab oqimi 1.5 km ichidagi ta’lim, ofis, savdo, transport va boshqa obyektlarning masofaga kamayuvchi ta’siridir. Natija biznes kafolati emas.</p></div>
+				<div class="road-analysis analysis-only"><div><span>YO‘L OQIMI POTENSIALI</span><strong id="road-access-score">—</strong></div><div><p><small>Eng yaqin asosiy yo‘l</small><b id="nearest-road-name">—</b><em id="nearest-road-distance">—</em></p><p><small>Yo‘l klassi</small><b id="nearest-road-class">—</b><em id="nearest-road-details">—</em></p></div><p id="road-insight">Yo‘l tarmog‘i hisoblanmoqda…</p></div>
+				<div class="find-results"><div class="district-summary"><span>MIJOZ TANLOVI SIMULYATSIYASI</span><strong id="find-district-name">—</strong><p id="find-district-summary">Hisoblanmoqda…</p><div><b id="find-population">—</b><small>Aholi</small><b id="find-density">—</b><small>odam/km²</small><b id="find-pois">—</b><small>Fast-food</small></div></div><div class="simulation-explainer"><strong>Simulyatsiyada nima sodir bo‘ladi?</strong><div><span>1</span><p><b>Hudud bo‘linadi</b>Tuman kichik olti burchakli qismlarga ajratiladi.</p></div><div><span>2</span><p><b>Har bir joy sinab ko‘riladi</b>Shu yerda yangi fast-food ochilsa, odamlar uni tanlash ehtimoli hisoblanadi.</p></div><div><span>3</span><p><b>Eng kuchli joylar saralanadi</b>Mijoz salohiyati, talab generatorlari, metro va asosiy yo‘llar birgalikda solishtiriladi.</p></div></div><div class="huff-view"><div><button class="is-active" type="button" data-huff-view="opportunity">Eng yaxshi joylar</button><button type="button" data-huff-view="capture" disabled>Tanlangan joy ta’siri</button></div><p id="huff-view-note">Xaritadagi yorqin hududlar yangi fast-food uchun kuchliroq imkoniyatni bildiradi.</p></div><div class="candidate-impact is-hidden" id="candidate-impact"><span>TANLANGAN JOY NATIJASI</span><strong id="impact-score">—</strong><div><p><small>Bozor ulushi</small><b id="impact-share">—</b></p><p><small>Taxminiy mijozlar</small><b id="impact-population">—</b></p><p><small>Eng yaqin raqib</small><b id="impact-nearest">—</b></p></div><p id="impact-brands">Joy tanlanganda uning raqiblarga taxminiy ta’siri ko‘rsatiladi.</p></div><div class="candidate-list" id="candidate-list"></div><p class="model-note"><b>Ball formulasi:</b> 45% mijoz salohiyati + 20% talab oqimi + 20% metro + 15% yo‘l oqimi. Yo‘l signali asosiy yo‘l klassi, qatorlar, tezlik va masofadan olinadi; bu real trafik o‘lchovi emas.</p></div>
 				<div class="report-section territory-section analysis-only"><div><h3>Taxminiy xizmat hududi</h3><span>Eng yaqin nuqta modeli</span></div><div class="territory-card"><div class="territory-primary"><span>Yangi lokatsiya maydoni</span><strong id="candidate-area">—</strong><small id="territory-share">Umumiy maydonning —</small></div><div class="territory-stats"><p><span>Tanlangan radius</span><b id="analysis-area">—</b></p><p><span>Raqiblar o‘rtachasi</span><b id="average-area">—</b></p><p><span>O‘rtachadan farqi</span><b id="area-comparison">—</b></p></div><div class="territory-bars"><div><span>Yangi nuqta</span><i><em id="candidate-area-bar"></em></i><b id="candidate-area-label">—</b></div><div><span>Raqib o‘rtachasi</span><i><em id="average-area-bar"></em></i><b id="average-area-label">—</b></div></div></div><div class="territory-note" id="territory-insight">Xizmat hududi raqobatchilargacha bo‘lgan to‘g‘ri chiziq masofasi asosida hisoblanadi.</div><div class="territory-explainer"><strong>Bu raqam qanday chiqdi?</strong><ol><li><span>1</span><p><b>Eng yaqin nuqta</b>Hududdagi har bir joy eng yaqin fast-food’ga biriktiriladi.</p></li><li><span>2</span><p><b>Radius bilan kesish</b>Faqat siz tanlagan doira ichidagi maydon qoldiriladi.</p></li><li><span>3</span><p><b>Raqib bilan solishtirish</b>Yangi hudud yaqin raqiblarning o‘rtacha maydoni bilan taqqoslanadi.</p></li></ol></div></div>
 				<div class="report-section analysis-only"><div><h3>Masofa bo‘yicha zichlik</h3><span>Fast food POI</span></div><div class="signal-list"><p><i></i>500 metr ichida <b id="band-500">—</b></p><p><i></i>1 kilometr ichida <b id="band-1000">—</b></p><p><i></i>2 kilometr ichida <b id="band-2000">—</b></p></div></div>
 				<div class="report-section analysis-only"><div><h3>Eng yaqin raqobatchi</h3></div><div class="empty-insight" id="nearest-competitor">Hisoblanmoqda…</div></div>
@@ -158,7 +160,7 @@ export function createApp() {
 
 			<div class="map-hint is-hidden"><span><i data-lucide="locate-fixed"></i></span> Xaritadan nuqtani tanlang</div>
 			<div class="brand-filter is-hidden"><span><small>TARMOQ FILTRI</small><strong id="brand-filter-name">EVOS</strong><b id="brand-filter-count">0 ta filial</b></span><button type="button" aria-label="Tarmoq filtrini yopish"><i data-lucide="x"></i></button></div>
-			<div class="territory-legend is-hidden"><strong>Xizmat hududi xaritasi</strong><p><i class="is-candidate"></i><span><b>Yangi lokatsiya</b>Sizning nuqtangiz eng yaqin bo‘lgan hudud</span></p><p><i class="is-competitor"></i><span><b>Raqib hududlari</b>Boshqa fast-food’lar yaqinroq bo‘lgan joylar</span></p><p><i class="is-generator"></i><span><b>Hudud markazi</b>Hududni yaratgan haqiqiy fast-food nuqtasi</span></p><p><i class="is-radius"></i><span><b>Tahlil chegarasi</b>Siz tanlagan radius doirasi</span></p></div>
+			<div class="territory-legend is-hidden"><header><strong>Xizmat hududi xaritasi</strong><button class="territory-legend-toggle" type="button" aria-label="Xizmat hududi izohini yig‘ish" aria-expanded="true"><i data-lucide="chevron-down"></i></button></header><div class="territory-legend-content"><p><i class="is-candidate"></i><span><b>Yangi lokatsiya</b>Sizning nuqtangiz eng yaqin bo‘lgan hudud</span></p><p><i class="is-competitor"></i><span><b>Raqib hududlari</b>Boshqa fast-food’lar yaqinroq bo‘lgan joylar</span></p><p><i class="is-generator"></i><span><b>Hudud markazi</b>Hududni yaratgan haqiqiy fast-food nuqtasi</span></p><p><i class="is-radius"></i><span><b>Tahlil chegarasi</b>Siz tanlagan radius doirasi</span></p></div></div>
 			<div class="district-legend is-hidden"><strong id="map-score-legend">Joy imkoniyati</strong><p id="map-score-description">Har bir kichik hududda yangi fast-food ochish alohida hisoblangan.</p><i></i><span><small id="map-score-low">Past</small><small id="map-score-high">Yuqori</small></span></div>
 			<a class="osm-attribution is-hidden" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
 			<div class="map-tools"><button type="button" data-map-action="in" aria-label="Xaritani kattalashtirish"><i data-lucide="plus"></i></button><button type="button" data-map-action="out" aria-label="Xaritani kichraytirish"><i data-lucide="minus"></i></button></div>
@@ -166,7 +168,7 @@ export function createApp() {
 	` )
 
 	createIcons( {
-		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, FileText, HelpCircle, Layers3, LocateFixed, MapPin, Minus, Plus, Search, Settings, Store, Target, UserRound, X },
+		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, FileText, HelpCircle, Layers3, LocateFixed, MapPin, Minus, Plus, Search, Settings, Store, Target, UserRound, X },
 		attrs: { "stroke-width": 1.8 },
 	} )
 
@@ -181,6 +183,8 @@ export function createApp() {
 	let metroFeatures = []
 	let demandFeatures = []
 	const demandSpatialIndex = new Map()
+	let roadFeatures = []
+	const roadSpatialIndex = new Map()
 	let searchResults = []
 	let activeSearchIndex = -1
 	let activePopup
@@ -205,6 +209,7 @@ export function createApp() {
 	const searchPanel = get( ".search-results" )
 	const brandFilter = get( ".brand-filter" )
 	const territoryLegend = get( ".territory-legend" )
+	const territoryLegendToggle = get( ".territory-legend-toggle" )
 	const districtLegend = get( ".district-legend" )
 	const layersToggle = get( ".layers-toggle" )
 	const layersPanel = get( ".layers-panel" )
@@ -214,6 +219,10 @@ export function createApp() {
 	let roadLayerLoaded = false
 	let metroLayerPromise
 	let demandLayerPromise
+	let roadLayerPromise
+	const territoryLegendCollapsed = localStorage.getItem( "ummon-territory-legend-collapsed" ) === "true"
+	territoryLegend.classList.toggle( "is-collapsed", territoryLegendCollapsed )
+	territoryLegendToggle.setAttribute( "aria-expanded", String( !territoryLegendCollapsed ) )
 
 	const hidePanels = () => [ workflow, report, page ].forEach( panel => panel.classList.add( "is-hidden" ) )
 	const setActiveNav = view => root.querySelectorAll( ".nav-item" ).forEach( item => item.classList.toggle( "is-active", item.dataset.view === view ) )
@@ -509,6 +518,55 @@ export function createApp() {
 
 		return { nearby, withinRadius: nearby.filter( item => item.distance <= localRadius ), accessScore, dominantCategory, strongest }
 	}
+	const roadCellSize = 0.01
+	const buildRoadSpatialIndex = features => {
+		roadSpatialIndex.clear()
+		features.forEach( feature => {
+			const longitudes = feature.geometry.coordinates.map( coordinate => coordinate[ 0 ] )
+			const latitudes = feature.geometry.coordinates.map( coordinate => coordinate[ 1 ] )
+			const minimumLongitudeCell = Math.floor( Math.min( ...longitudes ) / roadCellSize )
+			const maximumLongitudeCell = Math.floor( Math.max( ...longitudes ) / roadCellSize )
+			const minimumLatitudeCell = Math.floor( Math.min( ...latitudes ) / roadCellSize )
+			const maximumLatitudeCell = Math.floor( Math.max( ...latitudes ) / roadCellSize )
+			for( let longitudeCell = minimumLongitudeCell; longitudeCell <= maximumLongitudeCell; longitudeCell++ ) {
+				for( let latitudeCell = minimumLatitudeCell; latitudeCell <= maximumLatitudeCell; latitudeCell++ ) {
+					const key = `${ longitudeCell }:${ latitudeCell }`
+					const cell = roadSpatialIndex.get( key ) || []
+					cell.push( feature )
+					roadSpatialIndex.set( key, cell )
+				}
+			}
+		} )
+	}
+	const getRoadContext = location => {
+		const longitudeCell = Math.floor( location.lng / roadCellSize )
+		const latitudeCell = Math.floor( location.lat / roadCellSize )
+		const candidates = new Map()
+		for( let longitudeOffset = -1; longitudeOffset <= 1; longitudeOffset++ ) {
+			for( let latitudeOffset = -1; latitudeOffset <= 1; latitudeOffset++ ) {
+				for( const feature of roadSpatialIndex.get( `${ longitudeCell + longitudeOffset }:${ latitudeCell + latitudeOffset }` ) || [] ) {
+					candidates.set( feature.properties.id, feature )
+				}
+			}
+		}
+		const nearby = [ ...candidates.values() ].map( feature => {
+			const distance = pointToLineDistance( point( [ location.lng, location.lat ] ), feature, { units: "meters" } )
+			const proximity = distance < 1000 ? ( 1 - distance / 1000 ) ** 1.25 : 0
+			return { feature, distance, signal: Number( feature.properties.flowScore || 0 ) * proximity }
+		} ).filter( item => item.distance <= 1000 ).sort( ( first, second ) => first.distance - second.distance )
+		const roadsByName = new Map()
+		nearby.forEach( item => {
+			const name = item.feature.properties.name
+			const key = name === "Nomsiz yo‘l" ? item.feature.properties.id : normalizeSearch( name )
+			if( !roadsByName.has( key ) || roadsByName.get( key ).signal < item.signal ) {
+				roadsByName.set( key, item )
+			}
+		} )
+		const strongest = [ ...roadsByName.values() ].sort( ( first, second ) => second.signal - first.signal )
+		const accessScore = Math.min( 100, Math.round( ( strongest[ 0 ]?.signal || 0 ) + strongest.slice( 1, 3 ).reduce( ( sum, item ) => sum + item.signal * 0.12, 0 ) ) )
+
+		return { nearby, nearest: nearby[ 0 ] || null, strongest: strongest[ 0 ] || null, accessScore }
+	}
 	const showMetroConnection = ( location, metro ) => {
 		const features = metro.nearest ? [ {
 			type: "Feature",
@@ -615,6 +673,7 @@ export function createApp() {
 		const territory = calculateTerritoryAnalysis()
 		const metro = getMetroContext( selectedPoint )
 		const demand = getDemandContext( selectedPoint )
+		const road = getRoadContext( selectedPoint )
 		showMetroConnection( selectedPoint, metro )
 		const insight = pressureScore >= 70
 			? "Bu hududda fast-food klasteri shakllangan. Talab signali bo‘lishi mumkin, ammo yangi biznes aniq format va kuchli differensiatsiya bilan kirishi kerak."
@@ -649,6 +708,16 @@ export function createApp() {
 			: demand.accessScore >= 45
 				? "Talab generatorlari yetarli, ammo oqim ayrim auditoriya yoki vaqt oralig‘iga bog‘liq bo‘lishi mumkin."
 				: "Yaqin atrofdagi talab generatorlari kam. Lokatsiya ko‘proq mahalliy aholi yoki avtomobil oqimiga tayanishi mumkin."
+		get( "#road-access-score" ).textContent = `${ road.accessScore }/100`
+		get( "#nearest-road-name" ).textContent = road.nearest?.feature.properties.name || "Asosiy yo‘l topilmadi"
+		get( "#nearest-road-distance" ).textContent = road.nearest ? formatDistance( road.nearest.distance ) : "—"
+		get( "#nearest-road-class" ).textContent = road.nearest?.feature.properties.roadClassLabel || "—"
+		get( "#nearest-road-details" ).textContent = road.nearest ? `${ road.nearest.feature.properties.lanes ? `${ road.nearest.feature.properties.lanes } qator · ` : "" }${ road.nearest.feature.properties.maxspeed } km/soat` : "—"
+		get( "#road-insight" ).textContent = road.accessScore >= 75
+			? "Lokatsiya kuchli avtomobil oqimi proksisiga ega asosiy yo‘lga yaqin. Haqiqiy kirish va parking imkoniyatini joyida tekshirish kerak."
+			: road.accessScore >= 45
+				? "Asosiy yo‘lga chiqish imkoniyati o‘rtacha. Ko‘rinuvchanlik va burilish qulayligi natijani sezilarli o‘zgartirishi mumkin."
+				: "Lokatsiya asosiy avtomobil yo‘llaridan uzoqroq. U ko‘proq piyoda yoki mahalliy mijoz oqimiga tayanadi."
 		get( "#band-500" ).textContent = within500.length
 		get( "#band-1000" ).textContent = within1000.length
 		get( "#band-2000" ).textContent = within2000.length
@@ -761,7 +830,7 @@ export function createApp() {
 		content.className = "h3-popup__content"
 		content.innerHTML = huffView === "capture"
 			? `<span>TANLANGAN JOY TA’SIRI</span><strong>${ properties.captureScore }%</strong><p>Ushbu kichik hududdagi taxminiy ${ formatNumber( properties.estimatedPopulation ) } aholining yangi fast-food’ni tanlash ehtimoli.</p><small>Foiz qancha yuqori bo‘lsa, yangi nuqta shu yerdan shuncha ko‘p mijoz jalb qilishi mumkin.</small>`
-			: `<span>JOY IMKONIYATI</span><strong>${ properties.opportunityScore }/100</strong><p>Mijoz salohiyati ${ properties.customerScore }/100 · talab oqimi ${ properties.demandScore }/100 · metro ${ properties.metroScore }/100.</p><small>${ properties.demandCount } ta talab generatori${ properties.demandCategory ? ` · kuchli signal: ${ properties.demandCategory }` : "" }.</small>`
+			: `<span>JOY IMKONIYATI</span><strong>${ properties.opportunityScore }/100</strong><p>Mijoz ${ properties.customerScore } · talab ${ properties.demandScore } · metro ${ properties.metroScore } · yo‘l ${ properties.roadScore }.</p><small>${ properties.demandCount } ta talab generatori${ properties.roadName ? ` · ${ properties.roadName } ${ formatDistance( properties.roadDistance ) }` : "" }.</small>`
 		activePopup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: true, offset: 10, maxWidth: "310px", className: "h3-popup" } )
 			.setLngLat( lngLat ).setDOMContent( content ).addTo( map )
 	}
@@ -833,7 +902,7 @@ export function createApp() {
 		const content = document.createElement( "div" )
 		content.className = "candidate-popup__content"
 		const metroText = feature.properties.metroName ? `${ feature.properties.metroName } · ${ formatDistance( feature.properties.metroDistance ) }` : "Metro signali yo‘q"
-		content.innerHTML = `<span>#${ feature.properties.rank } · TAVSIYA ETILGAN JOY</span><strong>${ feature.properties.score }/100</strong><p>Mijoz ${ feature.properties.customerScore }/100 · talab oqimi ${ feature.properties.demandScore }/100 · metro ${ feature.properties.metroScore }/100</p><small>${ feature.properties.demandCount } ta talab generatori · Metro: ${ metroText }</small>`
+		content.innerHTML = `<span>#${ feature.properties.rank } · TAVSIYA ETILGAN JOY</span><strong>${ feature.properties.score }/100</strong><p>Mijoz ${ feature.properties.customerScore } · talab ${ feature.properties.demandScore } · metro ${ feature.properties.metroScore } · yo‘l ${ feature.properties.roadScore }</p><small>${ feature.properties.demandCount } ta generator · ${ feature.properties.roadName ? `${ feature.properties.roadName } ${ formatDistance( feature.properties.roadDistance ) }` : "asosiy yo‘l signali yo‘q" } · Metro: ${ metroText }</small>`
 		const button = document.createElement( "button" )
 		button.type = "button"
 		button.textContent = "Bu nuqtani chuqur tahlil qilish"
@@ -891,14 +960,15 @@ export function createApp() {
 			const distances = poiFeatures.map( poi => distanceMeters( center, poi.geometry.coordinates ) ).sort( ( first, second ) => first - second )
 			const metro = getMetroContext( center )
 			const demand = getDemandContext( center )
-			return { origin, coordinates, servedPopulation, marketShare: servedPopulation / Number( district.properties.population ) * 100, nearby: distances.filter( distance => distance <= radius ).length, nearest: distances[ 0 ] ?? 5000, metro, demand }
+			const road = getRoadContext( center )
+			return { origin, coordinates, servedPopulation, marketShare: servedPopulation / Number( district.properties.population ) * 100, nearby: distances.filter( distance => distance <= radius ).length, nearest: distances[ 0 ] ?? 5000, metro, demand, road }
 		} )
 		const servedValues = scored.map( item => item.servedPopulation )
 		const minimumServed = Math.min( ...servedValues )
 		const servedRange = Math.max( 1, Math.max( ...servedValues ) - minimumServed )
 		scored.forEach( item => {
 			const customerScore = ( item.servedPopulation - minimumServed ) / servedRange * 100
-			const combinedScore = customerScore * 0.55 + item.demand.accessScore * 0.25 + item.metro.accessScore * 0.2
+			const combinedScore = customerScore * 0.45 + item.demand.accessScore * 0.2 + item.metro.accessScore * 0.2 + item.road.accessScore * 0.15
 			item.score = Math.round( 35 + combinedScore / 100 * 63 )
 			item.customerScore = Math.round( customerScore )
 			item.origin.properties.opportunityScore = item.score
@@ -907,6 +977,9 @@ export function createApp() {
 			item.origin.properties.demandScore = item.demand.accessScore
 			item.origin.properties.demandCount = item.demand.withinRadius.length
 			item.origin.properties.demandCategory = item.demand.strongest?.feature.properties.categoryLabel || null
+			item.origin.properties.roadScore = item.road.accessScore
+			item.origin.properties.roadDistance = item.road.nearest?.distance ?? null
+			item.origin.properties.roadName = item.road.nearest?.feature.properties.name || null
 			item.origin.properties.metroScore = item.metro.accessScore
 			item.origin.properties.metroDistance = item.metro.nearest?.distance ?? null
 			item.origin.properties.metroName = item.metro.nearest?.feature.properties.name || null
@@ -914,7 +987,7 @@ export function createApp() {
 		scored.sort( ( first, second ) => second.score - first.score )
 		candidateFeatures = []
 		for( const item of scored ) {
-			const feature = point( item.coordinates, { id: `candidate-${ item.origin.properties.id }`, score: item.score, customerScore: item.customerScore, demandScore: item.demand.accessScore, demandCount: item.demand.withinRadius.length, demandCategory: item.demand.strongest?.feature.properties.categoryLabel || null, nearby: item.nearby, nearest: item.nearest, servedPopulation: item.servedPopulation, marketShare: item.marketShare, district: district.properties.name, metroScore: item.metro.accessScore, metroDistance: item.metro.nearest?.distance ?? null, metroName: item.metro.nearest?.feature.properties.name || null } )
+			const feature = point( item.coordinates, { id: `candidate-${ item.origin.properties.id }`, score: item.score, customerScore: item.customerScore, demandScore: item.demand.accessScore, demandCount: item.demand.withinRadius.length, demandCategory: item.demand.strongest?.feature.properties.categoryLabel || null, roadScore: item.road.accessScore, roadDistance: item.road.nearest?.distance ?? null, roadName: item.road.nearest?.feature.properties.name || null, nearby: item.nearby, nearest: item.nearest, servedPopulation: item.servedPopulation, marketShare: item.marketShare, district: district.properties.name, metroScore: item.metro.accessScore, metroDistance: item.metro.nearest?.distance ?? null, metroName: item.metro.nearest?.feature.properties.name || null } )
 			const farEnough = candidateFeatures.every( candidate => distanceMeters( { lng: feature.geometry.coordinates[ 0 ], lat: feature.geometry.coordinates[ 1 ] }, candidate.geometry.coordinates ) >= 750 )
 			if( farEnough ) {
 				feature.properties.rank = candidateFeatures.length + 1
@@ -934,7 +1007,7 @@ export function createApp() {
 		get( "#find-population" ).textContent = formatNumber( district.properties.population )
 		get( "#find-density" ).textContent = formatNumber( district.properties.populationDensity )
 		get( "#find-pois" ).textContent = district.properties.poiCount
-		get( "#find-district-summary" ).textContent = `Tuman ${ opportunityFeatures.length } ta kichik hududga bo‘lindi. Mijoz salohiyati 55%, talab oqimi 25%, metro 20% vazn bilan hisoblanib, ${ candidateFeatures.length } ta eng kuchli joy ajratildi.`
+		get( "#find-district-summary" ).textContent = `Tuman ${ opportunityFeatures.length } ta kichik hududga bo‘lindi. Mijoz 45%, talab oqimi 20%, metro 20%, yo‘l oqimi 15% vazn bilan hisoblanib, ${ candidateFeatures.length } ta eng kuchli joy ajratildi.`
 		get( "#map-score-legend" ).textContent = "Joy imkoniyati"
 		get( "#map-score-description" ).textContent = "Har bir kichik hududda yangi fast-food ochish alohida hisoblangan."
 		get( "#map-score-low" ).textContent = "Band"
@@ -949,7 +1022,7 @@ export function createApp() {
 			button.type = "button"
 			button.dataset.candidateId = feature.properties.id
 			const metroLabel = feature.properties.metroName ? `metro ${ formatDistance( feature.properties.metroDistance ) }` : "metro signali yo‘q"
-			button.innerHTML = `<span>${ feature.properties.rank }</span><div><strong>${ feature.properties.score } ball · ${ feature.properties.marketShare.toFixed( 1 ) }% bozor ulushi</strong><small>Talab oqimi ${ feature.properties.demandScore }/100 · ${ feature.properties.demandCount } ta generator · ${ metroLabel }</small></div><b>Ko‘rish</b>`
+			button.innerHTML = `<span>${ feature.properties.rank }</span><div><strong>${ feature.properties.score } ball · ${ feature.properties.marketShare.toFixed( 1 ) }% bozor ulushi</strong><small>Talab ${ feature.properties.demandScore}/100 · yo‘l ${ feature.properties.roadScore}/100 · ${ metroLabel }</small></div><b>Ko‘rish</b>`
 			button.addEventListener( "click", () => {
 				showCandidatePopup( feature )
 			} )
@@ -1204,7 +1277,10 @@ export function createApp() {
 			if( !response.ok ) {
 				throw new Error( `Road data request failed: ${ response.status }` )
 			}
-			map.getSource( "road-flow" ).setData( await response.json() )
+			const data = await response.json()
+			roadFeatures = data.features
+			buildRoadSpatialIndex( roadFeatures )
+			map.getSource( "road-flow" ).setData( data )
 			roadLayerLoaded = true
 			applyCustomLayerSettings()
 		}
@@ -1503,7 +1579,7 @@ export function createApp() {
 		loadBoundaryData()
 		metroLayerPromise = loadMetroLayer()
 		demandLayerPromise = loadDemandLayer()
-		loadRoadLayer()
+		roadLayerPromise = loadRoadLayer()
 		loadPoiLayer()
 	} )
 
@@ -1562,6 +1638,12 @@ export function createApp() {
 	get( ".close-report" ).addEventListener( "click", showMap )
 	get( ".close-page" ).addEventListener( "click", showMap )
 	brandFilter.querySelector( "button" ).addEventListener( "click", clearBrandMode )
+	territoryLegendToggle.addEventListener( "click", () => {
+		const collapsed = territoryLegend.classList.toggle( "is-collapsed" )
+		territoryLegendToggle.setAttribute( "aria-expanded", String( !collapsed ) )
+		territoryLegendToggle.setAttribute( "aria-label", collapsed ? "Xizmat hududi izohini ochish" : "Xizmat hududi izohini yig‘ish" )
+		localStorage.setItem( "ummon-territory-legend-collapsed", String( collapsed ) )
+	} )
 	layersToggle.addEventListener( "click", () => {
 		const opening = layersPanel.classList.contains( "is-hidden" )
 		layersPanel.classList.toggle( "is-hidden", !opening )
@@ -1609,12 +1691,13 @@ export function createApp() {
 
 	action.addEventListener( "click", async() => {
 		isSelecting = false
-		await Promise.all( [ metroLayerPromise, demandLayerPromise ].filter( Boolean ) )
+		await Promise.all( [ metroLayerPromise, demandLayerPromise, roadLayerPromise ].filter( Boolean ) )
 		closeLayerPanel()
 		hidePanels()
 		report.classList.remove( "is-hidden" )
 		report.classList.toggle( "is-find-report", activeWorkflow === "find" )
 		layerSettings.metro = true
+		layerSettings.roadFlow = true
 		saveLayerSettings()
 		syncLayerControls()
 		if( activeWorkflow === "find" ) {
