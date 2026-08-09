@@ -19,6 +19,7 @@ import {
 	X,
 	createIcons,
 } from "lucide"
+import { area, bbox, booleanPointInPolygon, circle, featureCollection, intersect, point, voronoi } from "@turf/turf"
 
 const workflows = {
 	analyze: {
@@ -96,6 +97,7 @@ export function createApp() {
 				<div class="report-head"><div><span class="eyebrow">REAL GEO ANALYTICS</span><h2 id="report-title">Raqobat tahlili</h2><small id="report-location">Tanlangan lokatsiya</small></div><button class="close-report" type="button"><i data-lucide="x"></i></button></div>
 				<div class="score-block"><div class="score-ring"><strong id="competition-score">—</strong><small>/100</small></div><div><span>RAQOBAT BOSIMI</span><strong id="competition-level">Hisoblanmoqda</strong><p id="competition-summary">Radius ichidagi fast-food nuqtalari asosida.</p></div></div>
 				<div class="metric-grid"><article><span>Raqobatchilar</span><strong id="competitor-count">—</strong></article><article><span>Tarmoq brandlari</span><strong id="brand-count">—</strong></article><article><span>Eng yaqin raqib</span><strong id="nearest-distance">—</strong></article><article><span>Dominant brand</span><strong id="dominant-brand">—</strong></article></div>
+				<div class="report-section territory-section"><div><h3>Taxminiy xizmat hududi</h3><span>Voronoi modeli</span></div><div class="territory-card"><div class="territory-primary"><span>Yangi lokatsiya maydoni</span><strong id="candidate-area">—</strong><small id="territory-share">Umumiy maydonning —</small></div><div class="territory-stats"><p><span>Tanlangan radius</span><b id="analysis-area">—</b></p><p><span>Raqiblar o‘rtachasi</span><b id="average-area">—</b></p><p><span>Comparison</span><b id="area-comparison">—</b></p></div><div class="territory-bars"><div><span>Yangi nuqta</span><i><em id="candidate-area-bar"></em></i><b id="candidate-area-label">—</b></div><div><span>Raqib o‘rtachasi</span><i><em id="average-area-bar"></em></i><b id="average-area-label">—</b></div></div></div><div class="territory-note" id="territory-insight">Xizmat hududi raqobatchilargacha bo‘lgan to‘g‘ri chiziq masofasi asosida hisoblanadi.</div><div class="territory-explainer"><strong>Bu raqam qanday chiqdi?</strong><ol><li><span>1</span><p><b>Eng yaqin nuqta</b>Hududdagi har bir joy eng yaqin fast-food’ga biriktiriladi.</p></li><li><span>2</span><p><b>Radius bilan kesish</b>Faqat siz tanlagan doira ichidagi maydon qoldiriladi.</p></li><li><span>3</span><p><b>Raqib bilan solishtirish</b>Yangi hudud yaqin raqiblarning o‘rtacha maydoni bilan taqqoslanadi.</p></li></ol></div></div>
 				<div class="report-section"><div><h3>Masofa bo‘yicha zichlik</h3><span>Fast food POI</span></div><div class="signal-list"><p><i></i>500 metr ichida <b id="band-500">—</b></p><p><i></i>1 kilometr ichida <b id="band-1000">—</b></p><p><i></i>2 kilometr ichida <b id="band-2000">—</b></p></div></div>
 				<div class="report-section"><div><h3>Eng yaqin raqobatchi</h3></div><div class="empty-insight" id="nearest-competitor">Hisoblanmoqda…</div></div>
 				<div class="report-section"><div><h3>Tahlil izohi</h3></div><div class="empty-insight" id="competition-insight">Hozircha tahlil faqat fast-food raqobati signaliga asoslanadi.</div></div>
@@ -107,6 +109,7 @@ export function createApp() {
 
 			<div class="map-hint is-hidden"><span><i data-lucide="locate-fixed"></i></span> Xaritadan nuqtani tanlang</div>
 			<div class="brand-filter is-hidden"><span><small>BRAND MODE</small><strong id="brand-filter-name">EVOS</strong><b id="brand-filter-count">0 ta filial</b></span><button type="button" aria-label="Brand filtrini yopish"><i data-lucide="x"></i></button></div>
+			<div class="territory-legend is-hidden"><strong>Xizmat hududi xaritasi</strong><p><i class="is-candidate"></i><span><b>Yangi lokatsiya</b>Sizning nuqtangiz eng yaqin bo‘lgan hudud</span></p><p><i class="is-competitor"></i><span><b>Raqib hududlari</b>Boshqa fast-food’lar yaqinroq bo‘lgan joylar</span></p><p><i class="is-radius"></i><span><b>Tahlil chegarasi</b>Siz tanlagan radius doirasi</span></p></div>
 			<div class="map-tools"><button type="button" data-map-action="in" aria-label="Xaritani kattalashtirish"><i data-lucide="plus"></i></button><button type="button" data-map-action="out" aria-label="Xaritani kichraytirish"><i data-lucide="minus"></i></button></div>
 		</main>
 	` )
@@ -128,6 +131,8 @@ export function createApp() {
 	let activeSearchIndex = -1
 	let activePopup
 	let activePoiId
+	let hoveredTerritoryId
+	let territoryFeatures = []
 
 	const get = selector => root.querySelector( selector )
 	const workflow = get( "[data-panel='workflow']" )
@@ -138,6 +143,7 @@ export function createApp() {
 	const searchInput = get( ".map-search input" )
 	const searchPanel = get( ".search-results" )
 	const brandFilter = get( ".brand-filter" )
+	const territoryLegend = get( ".territory-legend" )
 	let poiLayerLoaded = false
 
 	const hidePanels = () => [ workflow, report, page ].forEach( panel => panel.classList.add( "is-hidden" ) )
@@ -150,6 +156,7 @@ export function createApp() {
 		action.disabled = true
 		get( "#selected-location" ).textContent = "Xaritani bosing"
 		hint.classList.add( "is-hidden" )
+		territoryLegend.classList.add( "is-hidden" )
 		if( marker ) {
 			marker.remove()
 			marker = null
@@ -157,6 +164,11 @@ export function createApp() {
 		if( map?.getSource( "selection-radius" ) ) {
 			map.getSource( "selection-radius" ).setData( { type: "FeatureCollection", features: [] } )
 		}
+		clearTerritoryHover()
+		if( map?.getSource( "voronoi-analysis" ) ) {
+			map.getSource( "voronoi-analysis" ).setData( { type: "FeatureCollection", features: [] } )
+		}
+		territoryFeatures = []
 	}
 
 	const selectLocation = ( point, poiId = null ) => {
@@ -266,6 +278,76 @@ export function createApp() {
 		return earthRadius * 2 * Math.atan2( Math.sqrt( value ), Math.sqrt( 1 - value ) )
 	}
 	const formatDistance = distance => distance < 1000 ? `${ Math.round( distance ) } m` : `${ ( distance / 1000 ).toFixed( 1 ) } km`
+	const formatArea = squareKilometers => squareKilometers < 1
+		? `${ new Intl.NumberFormat( "uz-UZ" ).format( Math.round( squareKilometers * 1000000 ) ) } m²`
+		: `${ squareKilometers.toFixed( 2 ) } km²`
+	const calculateTerritoryAnalysis = () => {
+		const boundary = circle( [ selectedPoint.lng, selectedPoint.lat ], radius / 1000, { steps: 72, units: "kilometers" } )
+		const contextRadius = Math.max( radius * 3, 4000 )
+		const contextBoundary = circle( [ selectedPoint.lng, selectedPoint.lat ], contextRadius / 1000, { steps: 32, units: "kilometers" } )
+		const contextBbox = bbox( contextBoundary )
+		const uniqueCoordinates = new Set( [ `${ selectedPoint.lng.toFixed( 7 ) }:${ selectedPoint.lat.toFixed( 7 ) }` ] )
+		const nearbyFeatures = poiFeatures.filter( feature => {
+			if( feature.properties.id === selectedPoiId ) {
+				return false
+			}
+			const distance = distanceMeters( selectedPoint, feature.geometry.coordinates )
+			const coordinateKey = `${ feature.geometry.coordinates[ 0 ].toFixed( 7 ) }:${ feature.geometry.coordinates[ 1 ].toFixed( 7 ) }`
+			if( distance <= 3 || distance > contextRadius || uniqueCoordinates.has( coordinateKey ) ) {
+				return false
+			}
+			uniqueCoordinates.add( coordinateKey )
+			return true
+		} )
+		const candidate = point( [ selectedPoint.lng, selectedPoint.lat ], { id: "candidate-location", kind: "candidate", name: "Yangi lokatsiya" } )
+		const inputs = featureCollection( [
+			candidate,
+			...nearbyFeatures.map( feature => point( feature.geometry.coordinates, {
+				id: feature.properties.id,
+				kind: "competitor",
+				name: cleanName( feature.properties.name ),
+				distance: distanceMeters( selectedPoint, feature.geometry.coordinates ),
+			} ) ),
+		] )
+		let clippedFeatures = []
+
+		if( inputs.features.length === 1 ) {
+			boundary.properties = candidate.properties
+			clippedFeatures = [ boundary ]
+		}
+		else {
+			const polygons = voronoi( inputs, { bbox: contextBbox } )
+			clippedFeatures = polygons.features.flatMap( polygonFeature => {
+				const clipped = intersect( featureCollection( [ polygonFeature, boundary ] ) )
+				if( !clipped ) {
+					return []
+				}
+				clipped.properties = { ...polygonFeature.properties }
+				return [ clipped ]
+			} )
+		}
+
+		clippedFeatures.forEach( feature => feature.properties.areaKm2 = area( feature ) / 1000000 )
+		territoryFeatures = clippedFeatures
+		map.getSource( "voronoi-analysis" )?.setData( featureCollection( clippedFeatures ) )
+		const analysisBbox = bbox( boundary )
+		const analysisPadding = window.innerWidth <= 800
+			? { top: 45, right: 30, bottom: 170, left: 30 }
+			: { top: 70, right: 520, bottom: 70, left: 70 }
+		map.fitBounds( analysisBbox, { padding: analysisPadding, maxZoom: 16, duration: 900 } )
+		const candidateCell = clippedFeatures.find( feature => feature.properties.kind === "candidate" )
+		const competitorCells = clippedFeatures.filter( feature => feature.properties.kind === "competitor" && feature.properties.distance <= radius )
+		const totalArea = area( boundary ) / 1000000
+		const candidateArea = candidateCell?.properties.areaKm2 ?? totalArea
+		const averageCompetitorArea = competitorCells.length
+			? competitorCells.reduce( ( sum, feature ) => sum + feature.properties.areaKm2, 0 ) / competitorCells.length
+			: null
+		const comparison = averageCompetitorArea ? candidateArea / averageCompetitorArea : null
+		const smallerCompetitors = competitorCells.filter( feature => feature.properties.areaKm2 < candidateArea ).length
+		const percentile = competitorCells.length ? Math.round( smallerCompetitors / competitorCells.length * 100 ) : null
+
+		return { totalArea, candidateArea, averageCompetitorArea, comparison, percentile }
+	}
 	const analyzeCompetition = () => {
 		const competitors = poiFeatures
 			.filter( feature => feature.properties.id !== selectedPoiId )
@@ -291,6 +373,7 @@ export function createApp() {
 		const outer2000 = within2000.length - within1000.length
 		const pressureScore = Math.min( 100, Math.round( within500.length * 10 + outer1000 * 3 + outer2000 * 0.75 ) )
 		const pressureLevel = pressureScore >= 70 ? "Yuqori" : pressureScore >= 35 ? "O‘rtacha" : "Past"
+		const territory = calculateTerritoryAnalysis()
 		const insight = pressureScore >= 70
 			? "Bu hududda fast-food klasteri shakllangan. Talab signali bo‘lishi mumkin, ammo yangi biznes aniq format va kuchli differensiatsiya bilan kirishi kerak."
 			: pressureScore >= 35
@@ -307,6 +390,19 @@ export function createApp() {
 		get( "#band-500" ).textContent = within500.length
 		get( "#band-1000" ).textContent = within1000.length
 		get( "#band-2000" ).textContent = within2000.length
+		get( "#candidate-area" ).textContent = formatArea( territory.candidateArea )
+		get( "#analysis-area" ).textContent = formatArea( territory.totalArea )
+		get( "#territory-share" ).textContent = `Umumiy maydonning ${ Math.round( territory.candidateArea / territory.totalArea * 100 ) }% qismi`
+		get( "#average-area" ).textContent = territory.averageCompetitorArea ? formatArea( territory.averageCompetitorArea ) : "Raqib yo‘q"
+		get( "#area-comparison" ).textContent = territory.comparison ? `${ territory.comparison.toFixed( 1 ) }×` : "—"
+		const maximumComparedArea = Math.max( territory.candidateArea, territory.averageCompetitorArea ?? 0 )
+		get( "#candidate-area-bar" ).style.width = `${ maximumComparedArea ? territory.candidateArea / maximumComparedArea * 100 : 0 }%`
+		get( "#average-area-bar" ).style.width = `${ maximumComparedArea && territory.averageCompetitorArea ? territory.averageCompetitorArea / maximumComparedArea * 100 : 0 }%`
+		get( "#candidate-area-label" ).textContent = formatArea( territory.candidateArea )
+		get( "#average-area-label" ).textContent = territory.averageCompetitorArea ? formatArea( territory.averageCompetitorArea ) : "Raqib yo‘q"
+		get( "#territory-insight" ).textContent = territory.comparison
+			? `Yangi nuqtaning taxminiy hududi yaqin raqiblar o‘rtachasidan ${ territory.comparison >= 1 ? "kattaroq" : "kichikroq" }. Hudud maydoni bo‘yicha raqiblarning ${ territory.percentile }%idan yuqori.`
+			: "Tanlangan radiusda taqqoslash uchun raqobatchi yo‘q; yangi nuqta butun tahlil hududini qamrab oladi."
 		get( "#nearest-competitor" ).textContent = nearest
 			? `${ cleanName( nearest.feature.properties.name ) } — ${ formatDistance( nearest.distance ) } masofada.`
 			: "2 km atrofida raqobatchi topilmadi."
@@ -318,6 +414,49 @@ export function createApp() {
 			map.setFeatureState( { source: "fast-food-poi", id: activePoiId }, { selected: false } )
 		}
 		activePoiId = null
+	}
+	const clearTerritoryHover = () => {
+		if( hoveredTerritoryId && map?.getSource( "voronoi-analysis" ) ) {
+			map.setFeatureState( { source: "voronoi-analysis", id: hoveredTerritoryId }, { hover: false } )
+		}
+		hoveredTerritoryId = null
+	}
+	const getTerritoryAt = lngLat => {
+		if( territoryFeatures.length === 0 ) {
+			return null
+		}
+		const cursorPoint = point( [ lngLat.lng, lngLat.lat ] )
+		return territoryFeatures.find( feature => booleanPointInPolygon( cursorPoint, feature ) ) ?? null
+	}
+	const createTerritoryPopup = ( properties, lngLat ) => {
+		activePopup?.remove()
+		const content = document.createElement( "div" )
+		const label = document.createElement( "span" )
+		const name = document.createElement( "strong" )
+		const description = document.createElement( "p" )
+		const metrics = document.createElement( "div" )
+		const areaMetric = document.createElement( "span" )
+		const distanceMetric = document.createElement( "span" )
+		content.className = "territory-popup__content"
+		label.textContent = properties.kind === "candidate" ? "YANGI LOKATSIYA HUDUDI" : "RAQIB XIZMAT HUDUDI"
+		name.textContent = properties.kind === "candidate" ? "Siz tanlagan nuqta" : cleanName( properties.name )
+		description.textContent = properties.kind === "candidate"
+			? "Bu polygon ichidagi joylar uchun yangi lokatsiya eng yaqin fast-food hisoblanadi."
+			: "Bu polygon ichidagi joylar uchun ushbu raqobatchi eng yaqin fast-food hisoblanadi."
+		areaMetric.innerHTML = `<small>Maydon</small><b>${ formatArea( Number( properties.areaKm2 ) ) }</b>`
+		distanceMetric.innerHTML = `<small>Markazdan</small><b>${ properties.kind === "candidate" ? "0 m" : formatDistance( Number( properties.distance ) ) }</b>`
+		metrics.append( areaMetric, distanceMetric )
+		content.append( label, name, description, metrics )
+		const territoryPopup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: false, offset: 12, maxWidth: "320px", className: "territory-popup" } )
+			.setLngLat( lngLat )
+			.setDOMContent( content )
+			.addTo( map )
+		activePopup = territoryPopup
+		territoryPopup.on( "close", () => {
+			if( activePopup === territoryPopup ) {
+				activePopup = null
+			}
+		} )
 	}
 
 	const clearBrandMode = () => {
@@ -631,14 +770,38 @@ export function createApp() {
 	window.addEventListener( "ummon:map-ready", event => {
 		map = event.detail
 		map.addSource( "selection-radius", { type: "geojson", data: { type: "FeatureCollection", features: [] } } )
-		map.addLayer( { id: "selection-radius-fill", type: "fill", source: "selection-radius", paint: { "fill-color": "#2388ff", "fill-opacity": 0.14, "fill-emissive-strength": 0.65 } } )
+		map.addSource( "voronoi-analysis", { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "id" } )
+		map.addLayer( { id: "selection-radius-fill", type: "fill", source: "selection-radius", paint: { "fill-color": "#2388ff", "fill-opacity": 0.035, "fill-emissive-strength": 0.25 } } )
+		map.addLayer( { id: "voronoi-analysis-fill", type: "fill", source: "voronoi-analysis", paint: { "fill-color": [ "match", [ "get", "kind" ], "candidate", "#009dff", "#315f91" ], "fill-opacity": [ "case", [ "boolean", [ "feature-state", "hover" ], false ], [ "match", [ "get", "kind" ], "candidate", 0.78, 0.55 ], [ "match", [ "get", "kind" ], "candidate", 0.62, 0.34 ] ], "fill-emissive-strength": 1.2 } } )
+		map.addLayer( { id: "voronoi-analysis-glow", type: "line", source: "voronoi-analysis", filter: [ "==", [ "get", "kind" ], "candidate" ], paint: { "line-color": "#00a8ff", "line-width": 14, "line-blur": 8, "line-opacity": 0.9, "line-emissive-strength": 3 } } )
+		map.addLayer( { id: "voronoi-analysis-line", type: "line", source: "voronoi-analysis", paint: { "line-color": [ "match", [ "get", "kind" ], "candidate", "#e0f7ff", "#79b9ea" ], "line-width": [ "case", [ "boolean", [ "feature-state", "hover" ], false ], [ "match", [ "get", "kind" ], "candidate", 5, 3.5 ], [ "match", [ "get", "kind" ], "candidate", 4, 2 ] ], "line-opacity": [ "match", [ "get", "kind" ], "candidate", 1, 0.9 ], "line-emissive-strength": [ "match", [ "get", "kind" ], "candidate", 2.8, 1.35 ] } } )
 		map.addLayer( { id: "selection-radius-glow", type: "line", source: "selection-radius", paint: { "line-color": "#168cff", "line-width": 10, "line-blur": 7, "line-opacity": 0.7, "line-emissive-strength": 2.4 } } )
 		map.addLayer( { id: "selection-radius-line", type: "line", source: "selection-radius", paint: { "line-color": "#8bd8ff", "line-width": 3, "line-emissive-strength": 1.8 } } )
 		map.on( "click", event => {
-			if( !isSelecting ) {
+			if( isSelecting ) {
+				selectLocation( event.lngLat )
 				return
 			}
-			selectLocation( event.lngLat )
+			const territoryFeature = getTerritoryAt( event.lngLat )
+			if( territoryFeature ) {
+				createTerritoryPopup( territoryFeature.properties, event.lngLat )
+			}
+		} )
+		map.on( "mousemove", event => {
+			const territoryFeature = getTerritoryAt( event.lngLat )
+			if( territoryFeature ) {
+				const territoryId = territoryFeature.properties.id
+				if( hoveredTerritoryId !== territoryId ) {
+					clearTerritoryHover()
+					hoveredTerritoryId = territoryId
+					map.setFeatureState( { source: "voronoi-analysis", id: hoveredTerritoryId }, { hover: true } )
+				}
+				map.getCanvas().style.cursor = "pointer"
+			}
+			else if( hoveredTerritoryId ) {
+				clearTerritoryHover()
+				map.getCanvas().style.cursor = "default"
+			}
 		} )
 		loadPoiLayer()
 	} )
@@ -714,6 +877,7 @@ export function createApp() {
 	action.addEventListener( "click", () => {
 		isSelecting = false
 		analyzeCompetition()
+		territoryLegend.classList.remove( "is-hidden" )
 		hidePanels()
 		report.classList.remove( "is-hidden" )
 		get( "#report-title" ).textContent = activeWorkflow === "find" ? "Hudud raqobati" : "Raqobat tahlili"
