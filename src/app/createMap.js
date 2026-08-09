@@ -1,6 +1,8 @@
 import "mapbox-gl/dist/mapbox-gl.css"
 import mapboxgl from "mapbox-gl"
 
+window.mapboxgl = mapboxgl
+
 mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN
 
 export function createMap() {
