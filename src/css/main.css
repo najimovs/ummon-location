@@ -1,0 +1,24 @@
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+	-webkit-tap-highlight-color: transparent;
+}
+
+:root {
+	color-scheme: dark only;
+	background-color: #000;
+	color: #fff;
+	font-family: system-ui, Roboto, sans-serif;
+	font-synthesis: none;
+	text-rendering: optimizeLegibility;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+	position: relative;
+	min-height: 100vh;
+	display: flex;
+	flex-direction: column;
+}
