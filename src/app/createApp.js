@@ -3,7 +3,6 @@ import {
 	ArrowLeftRight,
 	ArrowRight,
 	ChevronDown,
-	Compass,
 	FileText,
 	HelpCircle,
 	Layers3,
@@ -37,13 +36,31 @@ const workflows = {
 }
 
 const navItems = [
-	[ "explore", "compass", "Explore" ],
 	[ "analyze", "map-pin", "Tahlil" ],
 	[ "find", "search", "Joy topish" ],
 	[ "reports", "file-text", "Hisobotlar" ],
 	[ "compare", "arrow-left-right", "Taqqoslash" ],
-	[ "layers", "layers-3", "Data qatlamlari" ],
 ]
+
+const defaultLayerSettings = {
+	fastFoodPoints: true,
+	fastFoodHeatmap: true,
+	serviceAreas: true,
+	placeLabels: true,
+	roadLabels: true,
+	poiLabels: false,
+	transitLabels: true,
+	objects3d: false,
+}
+
+const readLayerSettings = () => {
+	try {
+		return { ...defaultLayerSettings, ...JSON.parse( localStorage.getItem( "ummon-layer-settings" ) || "{}" ) }
+	}
+	catch {
+		return { ...defaultLayerSettings }
+	}
+}
 
 const circleFeature = ( point, radius ) => {
 	const coordinates = []
@@ -61,7 +78,7 @@ const circleFeature = ( point, radius ) => {
 export function createApp() {
 	const root = document.querySelector( "#root" )
 	const navigation = navItems.map( ( [ id, icon, label ] ) => `
-		<button class="nav-item ${ id === "explore" ? "is-active" : "" }" type="button" data-view="${ id }">
+		<button class="nav-item" type="button" data-view="${ id }">
 			<span><i data-lucide="${ icon }"></i></span><b>${ label }</b>
 		</button>
 	` ).join( "" )
@@ -71,6 +88,25 @@ export function createApp() {
 			<a class="brand" href="#" aria-label="Ummon Location"><span class="brand-mark"><img src="/logo.png" alt=""></span><span><strong>Ummon</strong><small>Location Intelligence</small></span></a>
 			<button class="city-selector" type="button"><i class="status-dot"></i>Toshkent <i data-lucide="chevron-down"></i></button>
 			<div class="map-search"><span><i data-lucide="search"></i></span><input type="search" placeholder="Fast food yoki manzilni qidiring" aria-label="Fast food qidirish" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-results"><kbd>⌘ K</kbd><div class="search-results" id="search-results" role="listbox" hidden></div></div>
+			<div class="layer-control">
+				<button class="layers-toggle" type="button" aria-expanded="false" aria-controls="layers-panel"><i data-lucide="layers-3"></i><span>Qatlamlar</span></button>
+				<section class="layers-panel is-hidden" id="layers-panel" aria-label="Xarita qatlamlari">
+					<header><div><span>XARITA SOZLAMALARI</span><strong>Qatlamlar</strong></div><button class="close-layers" type="button" aria-label="Qatlamlarni yopish"><i data-lucide="x"></i></button></header>
+					<div class="layer-group"><b>Ummon data</b>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="fastFoodPoints"><span><i class="layer-dot is-poi"></i><em>Fast-food nuqtalari<small>POI va brand lokatsiyalari</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="fastFoodHeatmap"><span><i class="layer-dot is-heatmap"></i><em>Zichlik heatmap’i<small>Fast-food klasterlari</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="serviceAreas"><span><i class="layer-dot is-area"></i><em>Xizmat hududlari<small>Tahlildan keyingi Voronoi</small></em></span><i></i></button>
+					</div>
+					<div class="layer-group"><b>Asosiy xarita</b>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="placeLabels"><span><em>Joy nomlari<small>Tuman va mahallalar</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="roadLabels"><span><em>Yo‘l nomlari<small>Ko‘cha va magistrallar</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="poiLabels"><span><em>Mapbox POI<small>Standart obyekt belgilari</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="transitLabels"><span><em>Transport<small>Metro va bekatlar</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="objects3d"><span><em>3D obyektlar<small>Bino va konstruksiyalar</small></em></span><i></i></button>
+					</div>
+					<footer>Tanlovlar ushbu qurilmada saqlanadi</footer>
+				</section>
+			</div>
 			<div class="top-actions"><button type="button" aria-label="Yordam"><i data-lucide="help-circle"></i></button><button type="button" aria-label="Profil"><i data-lucide="user-round"></i></button></div>
 		</header>
 
@@ -109,13 +145,13 @@ export function createApp() {
 
 			<div class="map-hint is-hidden"><span><i data-lucide="locate-fixed"></i></span> Xaritadan nuqtani tanlang</div>
 			<div class="brand-filter is-hidden"><span><small>BRAND MODE</small><strong id="brand-filter-name">EVOS</strong><b id="brand-filter-count">0 ta filial</b></span><button type="button" aria-label="Brand filtrini yopish"><i data-lucide="x"></i></button></div>
-			<div class="territory-legend is-hidden"><strong>Xizmat hududi xaritasi</strong><p><i class="is-candidate"></i><span><b>Yangi lokatsiya</b>Sizning nuqtangiz eng yaqin bo‘lgan hudud</span></p><p><i class="is-competitor"></i><span><b>Raqib hududlari</b>Boshqa fast-food’lar yaqinroq bo‘lgan joylar</span></p><p><i class="is-radius"></i><span><b>Tahlil chegarasi</b>Siz tanlagan radius doirasi</span></p></div>
+			<div class="territory-legend is-hidden"><strong>Xizmat hududi xaritasi</strong><p><i class="is-candidate"></i><span><b>Yangi lokatsiya</b>Sizning nuqtangiz eng yaqin bo‘lgan hudud</span></p><p><i class="is-competitor"></i><span><b>Raqib hududlari</b>Boshqa fast-food’lar yaqinroq bo‘lgan joylar</span></p><p><i class="is-generator"></i><span><b>Cell markazi</b>Hududni yaratgan haqiqiy fast-food POI</span></p><p><i class="is-radius"></i><span><b>Tahlil chegarasi</b>Siz tanlagan radius doirasi</span></p></div>
 			<div class="map-tools"><button type="button" data-map-action="in" aria-label="Xaritani kattalashtirish"><i data-lucide="plus"></i></button><button type="button" data-map-action="out" aria-label="Xaritani kichraytirish"><i data-lucide="minus"></i></button></div>
 		</main>
 	` )
 
 	createIcons( {
-		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, Compass, FileText, HelpCircle, Layers3, LocateFixed, MapPin, Minus, Plus, Search, Settings, Store, Target, UserRound, X },
+		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, FileText, HelpCircle, Layers3, LocateFixed, MapPin, Minus, Plus, Search, Settings, Store, Target, UserRound, X },
 		attrs: { "stroke-width": 1.8 },
 	} )
 
@@ -133,6 +169,7 @@ export function createApp() {
 	let activePoiId
 	let hoveredTerritoryId
 	let territoryFeatures = []
+	const layerSettings = readLayerSettings()
 
 	const get = selector => root.querySelector( selector )
 	const workflow = get( "[data-panel='workflow']" )
@@ -144,6 +181,8 @@ export function createApp() {
 	const searchPanel = get( ".search-results" )
 	const brandFilter = get( ".brand-filter" )
 	const territoryLegend = get( ".territory-legend" )
+	const layersToggle = get( ".layers-toggle" )
+	const layersPanel = get( ".layers-panel" )
 	let poiLayerLoaded = false
 
 	const hidePanels = () => [ workflow, report, page ].forEach( panel => panel.classList.add( "is-hidden" ) )
@@ -168,6 +207,9 @@ export function createApp() {
 		if( map?.getSource( "voronoi-analysis" ) ) {
 			map.getSource( "voronoi-analysis" ).setData( { type: "FeatureCollection", features: [] } )
 		}
+		if( map?.getSource( "voronoi-sites" ) ) {
+			map.getSource( "voronoi-sites" ).setData( { type: "FeatureCollection", features: [] } )
+		}
 		territoryFeatures = []
 	}
 
@@ -185,6 +227,7 @@ export function createApp() {
 	}
 
 	const startWorkflow = mode => {
+		closeLayerPanel()
 		activePopup?.remove()
 		clearBrandMode()
 		activeWorkflow = mode
@@ -203,17 +246,18 @@ export function createApp() {
 		}
 	}
 
-	const showExplore = async() => {
+	const showMap = async() => {
+		closeLayerPanel()
 		hidePanels()
 		clearSelection()
 		clearBrandMode()
-		setActiveNav( "explore" )
+		setActiveNav( null )
 		if( map ) {
 			if( !poiLayerLoaded ) {
 				await loadPoiLayer()
 			}
 			else {
-				setPoiLayerVisibility( "visible" )
+				applyCustomLayerSettings()
 			}
 		}
 	}
@@ -221,11 +265,11 @@ export function createApp() {
 	const pageData = {
 		reports: [ "HISOBOTLAR", "Mening hisobotlarim", "Saqlangan lokatsiya tahlillari shu yerda jamlanadi.", "Hali hisobot yo‘q", "Birinchi lokatsiyani tahlil qilganingizdan so‘ng hisobot shu yerda ko‘rinadi." ],
 		compare: [ "SOLISHTIRISH", "Lokatsiyalarni taqqoslash", "Ikki yoki undan ortiq lokatsiyaning biznes signallarini yonma-yon solishtiring.", "Taqqoslash ro‘yxati bo‘sh", "Hisobotlardan lokatsiyalarni tanlab bu yerga qo‘shish mumkin bo‘ladi." ],
-		layers: [ "GEO-DATA", "Data qatlamlari", "Tahlilda qatnashadigan ochiq ma’lumotlar va ularning holati.", "7 ta signal qatlami", "Transport, raqobat, auditoriya, talab, yo‘l, delivery va qulaylik ma’lumotlari." ],
 		settings: [ "SOZLAMALAR", "Mahsulot sozlamalari", "Standart radius, til va xarita ko‘rinishini boshqaring.", "Sozlamalar tez orada", "MVP davomida asosiy parametrlar shu bo‘limga qo‘shiladi." ],
 	}
 
 	const showPage = view => {
+		closeLayerPanel()
 		activePopup?.remove()
 		clearBrandMode()
 		const data = pageData[ view ]
@@ -256,6 +300,44 @@ export function createApp() {
 			}
 		} )
 	}
+	const setLayerVisibility = ( layerIds, visible ) => layerIds.forEach( layerId => {
+		if( map?.getLayer( layerId ) ) {
+			map.setLayoutProperty( layerId, "visibility", visible ? "visible" : "none" )
+		}
+	} )
+	const applyBasemapSettings = () => {
+		if( !map ) {
+			return
+		}
+		const config = {
+			showPlaceLabels: layerSettings.placeLabels,
+			showRoadLabels: layerSettings.roadLabels,
+			showPointOfInterestLabels: layerSettings.poiLabels,
+			showTransitLabels: layerSettings.transitLabels,
+			show3dObjects: layerSettings.objects3d,
+		}
+		Object.entries( config ).forEach( ( [ key, value ] ) => map.setConfigProperty( "basemap", key, value ) )
+	}
+	const applyCustomLayerSettings = () => {
+		if( !map ) {
+			return
+		}
+		setLayerVisibility( [ "fast-food-heatmap" ], layerSettings.fastFoodHeatmap )
+		setLayerVisibility( [ "fast-food-point-glow", "fast-food-points" ], layerSettings.fastFoodPoints )
+		setLayerVisibility( [ "voronoi-analysis-fill", "voronoi-analysis-glow", "voronoi-analysis-line", "voronoi-site-glow", "voronoi-site-points" ], layerSettings.serviceAreas )
+		territoryLegend.classList.toggle( "is-hidden", !layerSettings.serviceAreas || territoryFeatures.length === 0 )
+	}
+	const syncLayerControls = () => get( ".layers-panel" ).querySelectorAll( "[data-layer-setting]" ).forEach( button => {
+		const enabled = Boolean( layerSettings[ button.dataset.layerSetting ] )
+		button.classList.toggle( "is-active", enabled )
+		button.setAttribute( "aria-checked", String( enabled ) )
+	} )
+	const saveLayerSettings = () => localStorage.setItem( "ummon-layer-settings", JSON.stringify( layerSettings ) )
+	const closeLayerPanel = () => {
+		layersPanel.classList.add( "is-hidden" )
+		layersToggle.classList.remove( "is-active" )
+		layersToggle.setAttribute( "aria-expanded", "false" )
+	}
 	const setBrandLayerVisibility = visibility => {
 		[ "fast-food-brand-glow", "fast-food-brand-points" ].forEach( layerId => {
 			if( map.getLayer( layerId ) ) {
@@ -283,9 +365,8 @@ export function createApp() {
 		: `${ squareKilometers.toFixed( 2 ) } km²`
 	const calculateTerritoryAnalysis = () => {
 		const boundary = circle( [ selectedPoint.lng, selectedPoint.lat ], radius / 1000, { steps: 72, units: "kilometers" } )
-		const contextRadius = Math.max( radius * 3, 4000 )
-		const contextBoundary = circle( [ selectedPoint.lng, selectedPoint.lat ], contextRadius / 1000, { steps: 32, units: "kilometers" } )
-		const contextBbox = bbox( contextBoundary )
+		const contextRadius = radius
+		const contextBbox = bbox( boundary )
 		const uniqueCoordinates = new Set( [ `${ selectedPoint.lng.toFixed( 7 ) }:${ selectedPoint.lat.toFixed( 7 ) }` ] )
 		const nearbyFeatures = poiFeatures.filter( feature => {
 			if( feature.properties.id === selectedPoiId ) {
@@ -330,6 +411,7 @@ export function createApp() {
 		clippedFeatures.forEach( feature => feature.properties.areaKm2 = area( feature ) / 1000000 )
 		territoryFeatures = clippedFeatures
 		map.getSource( "voronoi-analysis" )?.setData( featureCollection( clippedFeatures ) )
+		map.getSource( "voronoi-sites" )?.setData( inputs )
 		const analysisBbox = bbox( boundary )
 		const analysisPadding = window.innerWidth <= 800
 			? { top: 45, right: 30, bottom: 170, left: 30 }
@@ -463,7 +545,7 @@ export function createApp() {
 		brandFilter.classList.add( "is-hidden" )
 		if( poiLayerLoaded ) {
 			setBrandLayerVisibility( "none" )
-			setPoiLayerVisibility( "visible" )
+			applyCustomLayerSettings()
 		}
 	}
 
@@ -564,8 +646,8 @@ export function createApp() {
 		searchInput.value = cleanName( feature.properties.name )
 		hidePanels()
 		clearSelection()
-		setActiveNav( "explore" )
-		setPoiLayerVisibility( "visible" )
+		setActiveNav( null )
+		applyCustomLayerSettings()
 		map.easeTo( { center: coordinates, zoom: 15, duration: 900 } )
 		createPoiPopup( feature.properties, coordinates )
 	}
@@ -760,7 +842,7 @@ export function createApp() {
 				map.on( "mouseleave", layerId, () => map.getCanvas().style.cursor = "default" )
 			} )
 			poiLayerLoaded = true
-			setPoiLayerVisibility( "visible" )
+			applyCustomLayerSettings()
 		}
 		catch( error ) {
 			console.error( error )
@@ -769,14 +851,18 @@ export function createApp() {
 
 	window.addEventListener( "ummon:map-ready", event => {
 		map = event.detail
+		applyBasemapSettings()
 		map.addSource( "selection-radius", { type: "geojson", data: { type: "FeatureCollection", features: [] } } )
 		map.addSource( "voronoi-analysis", { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "id" } )
+		map.addSource( "voronoi-sites", { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "id" } )
 		map.addLayer( { id: "selection-radius-fill", type: "fill", source: "selection-radius", paint: { "fill-color": "#2388ff", "fill-opacity": 0.035, "fill-emissive-strength": 0.25 } } )
 		map.addLayer( { id: "voronoi-analysis-fill", type: "fill", source: "voronoi-analysis", paint: { "fill-color": [ "match", [ "get", "kind" ], "candidate", "#009dff", "#315f91" ], "fill-opacity": [ "case", [ "boolean", [ "feature-state", "hover" ], false ], [ "match", [ "get", "kind" ], "candidate", 0.78, 0.55 ], [ "match", [ "get", "kind" ], "candidate", 0.62, 0.34 ] ], "fill-emissive-strength": 1.2 } } )
 		map.addLayer( { id: "voronoi-analysis-glow", type: "line", source: "voronoi-analysis", filter: [ "==", [ "get", "kind" ], "candidate" ], paint: { "line-color": "#00a8ff", "line-width": 14, "line-blur": 8, "line-opacity": 0.9, "line-emissive-strength": 3 } } )
 		map.addLayer( { id: "voronoi-analysis-line", type: "line", source: "voronoi-analysis", paint: { "line-color": [ "match", [ "get", "kind" ], "candidate", "#e0f7ff", "#79b9ea" ], "line-width": [ "case", [ "boolean", [ "feature-state", "hover" ], false ], [ "match", [ "get", "kind" ], "candidate", 5, 3.5 ], [ "match", [ "get", "kind" ], "candidate", 4, 2 ] ], "line-opacity": [ "match", [ "get", "kind" ], "candidate", 1, 0.9 ], "line-emissive-strength": [ "match", [ "get", "kind" ], "candidate", 2.8, 1.35 ] } } )
-		map.addLayer( { id: "selection-radius-glow", type: "line", source: "selection-radius", paint: { "line-color": "#168cff", "line-width": 10, "line-blur": 7, "line-opacity": 0.7, "line-emissive-strength": 2.4 } } )
-		map.addLayer( { id: "selection-radius-line", type: "line", source: "selection-radius", paint: { "line-color": "#8bd8ff", "line-width": 3, "line-emissive-strength": 1.8 } } )
+		map.addLayer( { id: "voronoi-site-glow", type: "circle", source: "voronoi-sites", paint: { "circle-color": [ "match", [ "get", "kind" ], "candidate", "#00a8ff", "#7ca9dc" ], "circle-radius": [ "match", [ "get", "kind" ], "candidate", 17, 12 ], "circle-blur": 0.78, "circle-opacity": 0.72, "circle-emissive-strength": 2.5 } } )
+		map.addLayer( { id: "voronoi-site-points", type: "circle", source: "voronoi-sites", paint: { "circle-color": [ "match", [ "get", "kind" ], "candidate", "#ffffff", "#d8e9fb" ], "circle-radius": [ "match", [ "get", "kind" ], "candidate", 8, 6 ], "circle-stroke-color": [ "match", [ "get", "kind" ], "candidate", "#00a8ff", "#547ca9" ], "circle-stroke-width": [ "match", [ "get", "kind" ], "candidate", 3, 2 ], "circle-emissive-strength": 2 } } )
+		map.addLayer( { id: "selection-radius-glow", type: "line", source: "selection-radius", paint: { "line-color": "#168cff", "line-width": 7, "line-blur": 5, "line-opacity": 0.38, "line-emissive-strength": 1.8 } } )
+		map.addLayer( { id: "selection-radius-line", type: "line", source: "selection-radius", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#bcecff", "line-width": 3.5, "line-dasharray": [ 2, 1.6 ], "line-opacity": 1, "line-emissive-strength": 2.2 } } )
 		map.on( "click", event => {
 			if( isSelecting ) {
 				selectLocation( event.lngLat )
@@ -803,6 +889,7 @@ export function createApp() {
 				map.getCanvas().style.cursor = "default"
 			}
 		} )
+		applyCustomLayerSettings()
 		loadPoiLayer()
 	} )
 
@@ -837,6 +924,9 @@ export function createApp() {
 		if( !get( ".map-search" ).contains( event.target ) ) {
 			closeSearch()
 		}
+		if( !get( ".layer-control" ).contains( event.target ) ) {
+			closeLayerPanel()
+		}
 	} )
 	document.addEventListener( "keydown", event => {
 		if( ( event.metaKey || event.ctrlKey ) && event.key.toLowerCase() === "k" ) {
@@ -846,21 +936,40 @@ export function createApp() {
 	} )
 
 	root.querySelectorAll( ".nav-item" ).forEach( button => button.addEventListener( "click", () => {
-		if( button.dataset.view === "explore" ) {
-			showExplore()
-		}
-		else if( [ "analyze", "find" ].includes( button.dataset.view ) ) {
+		if( [ "analyze", "find" ].includes( button.dataset.view ) ) {
 			startWorkflow( button.dataset.view )
 		}
 		else {
 			showPage( button.dataset.view )
 		}
 	} ) )
-	get( ".back-button" ).addEventListener( "click", showExplore )
-	get( ".close-button" ).addEventListener( "click", showExplore )
-	get( ".close-report" ).addEventListener( "click", showExplore )
-	get( ".close-page" ).addEventListener( "click", showExplore )
+	get( ".back-button" ).addEventListener( "click", showMap )
+	get( ".close-button" ).addEventListener( "click", showMap )
+	get( ".close-report" ).addEventListener( "click", showMap )
+	get( ".close-page" ).addEventListener( "click", showMap )
 	brandFilter.querySelector( "button" ).addEventListener( "click", clearBrandMode )
+	layersToggle.addEventListener( "click", () => {
+		const opening = layersPanel.classList.contains( "is-hidden" )
+		layersPanel.classList.toggle( "is-hidden", !opening )
+		layersToggle.classList.toggle( "is-active", opening )
+		layersToggle.setAttribute( "aria-expanded", String( opening ) )
+	} )
+	get( ".close-layers" ).addEventListener( "click", () => {
+		closeLayerPanel()
+	} )
+	layersPanel.querySelectorAll( "[data-layer-setting]" ).forEach( button => button.addEventListener( "click", () => {
+		const key = button.dataset.layerSetting
+		layerSettings[ key ] = !layerSettings[ key ]
+		saveLayerSettings()
+		syncLayerControls()
+		if( [ "placeLabels", "roadLabels", "poiLabels", "transitLabels", "objects3d" ].includes( key ) ) {
+			applyBasemapSettings()
+		}
+		else {
+			applyCustomLayerSettings()
+		}
+	} ) )
+	syncLayerControls()
 
 	root.querySelectorAll( "[data-control='radius'] button" ).forEach( button => button.addEventListener( "click", () => {
 		radius = Number( button.dataset.value )
@@ -876,8 +985,13 @@ export function createApp() {
 
 	action.addEventListener( "click", () => {
 		isSelecting = false
+		closeLayerPanel()
+		layerSettings.serviceAreas = true
+		saveLayerSettings()
+		syncLayerControls()
 		analyzeCompetition()
-		territoryLegend.classList.remove( "is-hidden" )
+		applyCustomLayerSettings()
+		territoryLegend.classList.toggle( "is-hidden", !layerSettings.serviceAreas )
 		hidePanels()
 		report.classList.remove( "is-hidden" )
 		get( "#report-title" ).textContent = activeWorkflow === "find" ? "Hudud raqobati" : "Raqobat tahlili"
