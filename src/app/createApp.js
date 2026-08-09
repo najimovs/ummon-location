@@ -13,7 +13,7 @@ import {
 	createIcons,
 } from "lucide"
 import { cellToBoundary, cellToLatLng, polygonToCells } from "h3-js"
-import { area, bbox, booleanPointInPolygon, circle, featureCollection, intersect, point, pointToLineDistance, voronoi } from "@turf/turf"
+import { area, bbox, booleanPointInPolygon, circle, featureCollection, intersect, nearestPointOnLine, point, pointToLineDistance, voronoi } from "@turf/turf"
 import { createComparisonAdvice, createLocationAdvice } from "../analysis/locationAdvisor.js"
 import { createCompetitionModel, explainCompetitionThreat } from "../analysis/smartCompetition.js"
 
@@ -297,6 +297,7 @@ export function createApp() {
 		map?.getSource( "location-candidates" )?.setData( featureCollection( [] ) )
 		map?.getSource( "h3-opportunity" )?.setData( featureCollection( [] ) )
 		map?.getSource( "metro-analysis-link" )?.setData( featureCollection( [] ) )
+		map?.getSource( "ai-evidence" )?.setData( featureCollection( [] ) )
 		if( map?.getLayer( "district-selected" ) ) {
 			map.setFilter( "district-selected", [ "==", [ "get", "id" ], "" ] )
 		}
@@ -503,6 +504,7 @@ export function createApp() {
 		demand: [ "demand-clusters-glow", "demand-clusters", "demand-cluster-count", "demand-points" ],
 		roads: [ "road-flow-glow", "road-flow-lines" ],
 		service: [ "voronoi-analysis-fill", "voronoi-analysis-glow", "voronoi-analysis-line", "voronoi-site-glow", "voronoi-site-points" ],
+		evidence: [ "ai-evidence-line-glow", "ai-evidence-lines", "ai-evidence-point-glow", "ai-evidence-points", "ai-evidence-labels" ],
 		opportunity: [ "h3-opportunity-fill", "h3-opportunity-line", "location-candidate-glow", "location-candidates" ],
 		districts: [ "district-fill", "district-line-glow", "district-line", "district-selected", "district-labels" ],
 	}
@@ -526,6 +528,7 @@ export function createApp() {
 			} )
 			;[ "metro", "transit", "demand", "roads", "opportunity", "districts" ].forEach( group => setLayerVisibility( focusLayerGroups[ group ], false ) )
 			setLayerVisibility( focusLayerGroups.service, true )
+			setLayerVisibility( focusLayerGroups.evidence, true )
 		}
 		else if( focusMode === "find-results" ) {
 			;[ "poi", "metro", "transit", "demand", "roads", "service", "districts" ].forEach( group => setLayerVisibility( focusLayerGroups[ group ], false ) )
@@ -594,6 +597,7 @@ export function createApp() {
 		setLayerVisibility( [ "district-labels" ], layerSettings.districts && opportunityFeatures.length === 0 )
 		setLayerVisibility( [ "location-candidate-glow", "location-candidates" ], candidateFeatures.length > 0 )
 		setLayerVisibility( [ "h3-opportunity-fill", "h3-opportunity-line" ], layerSettings.opportunityMap && opportunityFeatures.length > 0 )
+		setLayerVisibility( focusLayerGroups.evidence, false )
 		territoryLegend.classList.toggle( "is-hidden", !layerSettings.serviceAreas || territoryFeatures.length === 0 )
 		districtLegend.classList.toggle( "is-hidden", !layerSettings.opportunityMap || opportunityFeatures.length === 0 || territoryFeatures.length > 0 )
 		applyFocusMode()
@@ -893,6 +897,30 @@ export function createApp() {
 		} ] : []
 		map?.getSource( "metro-analysis-link" )?.setData( featureCollection( features ) )
 	}
+	const showAiEvidence = ( location, signals ) => {
+		const origin = [ location.lng, location.lat ]
+		const evidence = []
+		const addEvidence = ( kind, label, target, distance ) => {
+			if( !target ) {
+				return
+			}
+			evidence.push( {
+				type: "Feature",
+				geometry: { type: "LineString", coordinates: [ origin, target ] },
+				properties: { kind, label, distance, featureType: "connection" },
+			}, point( target, { kind, label, distance, featureType: "evidence" } ) )
+		}
+		const threat = signals.topThreat
+		addEvidence( "threat", `Xavf · ${ threat ? cleanName( threat.feature.properties.brandName || threat.feature.properties.name ) : "" }`, threat?.feature.geometry.coordinates, threat?.distance )
+		const demand = signals.demand.strongest
+		addEvidence( "demand", `Talab · ${ demand ? cleanName( demand.feature.properties.name ) : "" }`, demand?.feature.geometry.coordinates, demand?.distance )
+		const metro = signals.metro.nearest
+		addEvidence( "metro", `Metro · ${ metro ? cleanName( metro.feature.properties.name ) : "" }`, metro?.feature.geometry.coordinates, metro?.distance )
+		const road = signals.road.nearest
+		const roadTarget = road ? nearestPointOnLine( road.feature, point( origin ), { units: "meters" } ).geometry.coordinates : null
+		addEvidence( "road", `Yo‘l · ${ road?.feature.properties.name || "" }`, roadTarget, road?.distance )
+		map?.getSource( "ai-evidence" )?.setData( featureCollection( evidence ) )
+	}
 	const formatArea = squareKilometers => squareKilometers < 1
 		? `${ new Intl.NumberFormat( "uz-UZ" ).format( Math.round( squareKilometers * 1000000 ) ) } m²`
 		: `${ squareKilometers.toFixed( 2 ) } km²`
@@ -984,6 +1012,7 @@ export function createApp() {
 		const demand = getDemandContext( selectedPoint )
 		const road = getRoadContext( selectedPoint )
 		showMetroConnection( selectedPoint, metro )
+		showAiEvidence( selectedPoint, { topThreat, demand, metro, road } )
 		const insight = pressureScore >= 70
 			? "Bu hududda fast-food klasteri shakllangan. Talab signali bo‘lishi mumkin, ammo yangi biznes aniq format va kuchli differensiatsiya bilan kirishi kerak."
 			: pressureScore >= 35
@@ -1075,7 +1104,7 @@ export function createApp() {
 			const districtMetricSelectors = [ "#district-population", "#district-pois", "#district-per-capita", "#district-comparison" ]
 			districtMetricSelectors.forEach( selector => get( selector ).textContent = "—" )
 		}
-		const advice = createLocationAdvice( { competition: pressureScore, demand: demand.accessScore, metro: metro.accessScore, transit: transit.accessScore, road: road.accessScore, territoryRatio: territory.comparison || 1, competitorCount: withinRadius.length, topThreat: topThreat ? cleanName( topThreat.feature.properties.brandName || topThreat.feature.properties.name ) : null } )
+		const advice = createLocationAdvice( { competition: pressureScore, demand: demand.accessScore, metro: metro.accessScore, transit: transit.accessScore, road: road.accessScore, territoryRatio: 1, competitorCount: withinRadius.length, topThreat: topThreat ? cleanName( topThreat.feature.properties.brandName || topThreat.feature.properties.name ) : null } )
 		renderAiAdvice( advice )
 		return { pressureScore, pressureLevel, competitorCount: withinRadius.length, equivalentCompetitors: competition.equivalentCompetitors, brandCount: brandCounts.size, nearest, topThreat, territory, metro, transit, demand, road, district, advice, poiIds: [ ...withinRadius.map( item => item.feature.properties.id ), ...( selectedPoiId ? [ selectedPoiId ] : [] ) ] }
 	}
@@ -1176,8 +1205,19 @@ export function createApp() {
 		get( "#map-score-low" ).textContent = mode === "capture" ? "Past %" : "Band"
 		get( "#map-score-high" ).textContent = mode === "capture" ? "Yuqori %" : "Imkoniyat"
 	}
+	const createCandidateAdvice = feature => createLocationAdvice( {
+		competition: feature.properties.competitionScore,
+		demand: feature.properties.demandScore,
+		metro: feature.properties.metroScore,
+		transit: feature.properties.transitScore,
+		road: feature.properties.roadScore,
+		territoryRatio: 1,
+		competitorCount: feature.properties.nearby,
+		topThreat: feature.properties.topThreat,
+	} )
 	const selectCandidateScenario = ( feature, focus = true ) => {
 		activeCandidateId = feature.properties.id
+		renderAiAdvice( createCandidateAdvice( feature ) )
 		const coordinates = feature.geometry.coordinates
 		showMetroConnection( { lng: coordinates[ 0 ], lat: coordinates[ 1 ] }, getMetroContext( { lng: coordinates[ 0 ], lat: coordinates[ 1 ] } ) )
 		const brandLosses = new Map()
@@ -1361,7 +1401,7 @@ export function createApp() {
 		} )
 		map.fitBounds( bbox( district ), { padding: { top: 70, right: window.innerWidth > 800 ? 560 : 35, bottom: 70, left: 70 }, duration: 900 } )
 		const topCandidate = candidateFeatures[ 0 ]
-		const advice = topCandidate ? createLocationAdvice( { competition: topCandidate.properties.competitionScore, demand: topCandidate.properties.demandScore, metro: topCandidate.properties.metroScore, transit: topCandidate.properties.transitScore, road: topCandidate.properties.roadScore, territoryRatio: 1, competitorCount: topCandidate.properties.nearby, topThreat: topCandidate.properties.topThreat } ) : createLocationAdvice( {} )
+		const advice = topCandidate ? createCandidateAdvice( topCandidate ) : createLocationAdvice( {} )
 		renderAiAdvice( advice )
 		return { district, candidates: candidateFeatures, advice }
 	}
@@ -1853,6 +1893,7 @@ export function createApp() {
 		map.addSource( "comparison-radius", { type: "geojson", data: featureCollection( [] ) } )
 		map.addSource( "voronoi-analysis", { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "id" } )
 		map.addSource( "voronoi-sites", { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "id" } )
+		map.addSource( "ai-evidence", { type: "geojson", data: featureCollection( [] ) } )
 		map.addLayer( { id: "district-fill", type: "fill", source: "districts", paint: { "fill-color": "#168bd4", "fill-opacity": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 0.14, 13, 0.08, 15, 0.04 ], "fill-emissive-strength": 0.35 } } )
 		map.addLayer( { id: "district-line-glow", type: "line", source: "districts", paint: { "line-color": "#2aaeff", "line-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 6, 14, 10 ], "line-blur": 5, "line-opacity": 0.45, "line-emissive-strength": 2.2 } } )
 		map.addLayer( { id: "district-line", type: "line", source: "districts", paint: { "line-color": "#9bdcff", "line-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 1.8, 14, 3 ], "line-opacity": 0.92, "line-emissive-strength": 2 } } )
@@ -1870,6 +1911,11 @@ export function createApp() {
 		map.addLayer( { id: "selection-radius-line", type: "line", source: "selection-radius", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#bcecff", "line-width": 3.5, "line-dasharray": [ 2, 1.6 ], "line-opacity": 1, "line-emissive-strength": 2.2 } } )
 		map.addLayer( { id: "comparison-radius-fill", type: "fill", source: "comparison-radius", paint: { "fill-color": [ "match", [ "get", "slot" ], "a", "#2388ff", "#aa6cff" ], "fill-opacity": 0.08, "fill-emissive-strength": 0.45 } } )
 		map.addLayer( { id: "comparison-radius-line", type: "line", source: "comparison-radius", paint: { "line-color": [ "match", [ "get", "slot" ], "a", "#71c5ff", "#d8a5ff" ], "line-width": 3, "line-dasharray": [ 2, 1.4 ], "line-opacity": 0.95, "line-emissive-strength": 2.1 } } )
+		map.addLayer( { id: "ai-evidence-line-glow", type: "line", source: "ai-evidence", filter: [ "==", [ "geometry-type" ], "LineString" ], layout: { visibility: "none", "line-cap": "round" }, paint: { "line-color": [ "match", [ "get", "kind" ], "threat", "#ff5378", "demand", "#a67cff", "metro", "#49dfff", "road", "#ffbd59", "#ffffff" ], "line-width": 11, "line-blur": 8, "line-opacity": 0.55, "line-emissive-strength": 3 } } )
+		map.addLayer( { id: "ai-evidence-lines", type: "line", source: "ai-evidence", filter: [ "==", [ "geometry-type" ], "LineString" ], layout: { visibility: "none", "line-cap": "round" }, paint: { "line-color": [ "match", [ "get", "kind" ], "threat", "#ff7895", "demand", "#c0a4ff", "metro", "#baf7ff", "road", "#ffd58b", "#ffffff" ], "line-width": 2.5, "line-dasharray": [ 2, 1.4 ], "line-opacity": 1, "line-emissive-strength": 2.5 } } )
+		map.addLayer( { id: "ai-evidence-point-glow", type: "circle", source: "ai-evidence", filter: [ "==", [ "geometry-type" ], "Point" ], layout: { visibility: "none" }, paint: { "circle-color": [ "match", [ "get", "kind" ], "threat", "#ff5378", "demand", "#9d78ff", "metro", "#42ddff", "road", "#ffb84d", "#ffffff" ], "circle-radius": 20, "circle-blur": 0.72, "circle-opacity": 0.8, "circle-emissive-strength": 3 } } )
+		map.addLayer( { id: "ai-evidence-points", type: "circle", source: "ai-evidence", filter: [ "==", [ "geometry-type" ], "Point" ], layout: { visibility: "none" }, paint: { "circle-color": "#07121f", "circle-radius": 8, "circle-stroke-color": [ "match", [ "get", "kind" ], "threat", "#ff7895", "demand", "#c0a4ff", "metro", "#baf7ff", "road", "#ffd58b", "#ffffff" ], "circle-stroke-width": 3, "circle-emissive-strength": 2.5 } } )
+		map.addLayer( { id: "ai-evidence-labels", type: "symbol", source: "ai-evidence", filter: [ "==", [ "geometry-type" ], "Point" ], layout: { visibility: "none", "text-field": [ "concat", [ "get", "label" ], "\n", [ "to-string", [ "round", [ "get", "distance" ] ] ], " m" ], "text-size": 11, "text-offset": [ 0, 1.45 ], "text-anchor": "top", "text-allow-overlap": false, "text-padding": 12 }, paint: { "text-color": "#f3f8ff", "text-halo-color": "rgba(3, 10, 19, .96)", "text-halo-width": 2.5, "text-halo-blur": 1, "text-emissive-strength": 2 } } )
 		map.addLayer( { id: "location-candidate-glow", type: "circle", source: "location-candidates", paint: { "circle-color": "#36c7ff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 18, 15, 28 ], "circle-blur": 0.72, "circle-opacity": 0.72, "circle-emissive-strength": 3 } } )
 		map.addLayer( { id: "location-candidates", type: "circle", source: "location-candidates", paint: { "circle-color": [ "interpolate", [ "linear" ], [ "get", "score" ], 50, "#4f85bd", 75, "#42c3ff", 95, "#e8fbff" ], "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 7, 15, 11 ], "circle-stroke-color": "#071525", "circle-stroke-width": 3, "circle-emissive-strength": 2.5 } } )
 		map.addLayer( { id: "road-flow-glow", type: "line", source: "road-flow", layout: { "line-sort-key": [ "get", "flowScore" ] }, paint: { "line-color": [ "interpolate", [ "linear" ], [ "get", "flowScore" ], 45, "#5478b9", 70, "#268cff", 90, "#54ddff", 100, "#d7f9ff" ], "line-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 4, 14, 9 ], "line-blur": 5, "line-opacity": 0.5, "line-emissive-strength": 2.8 } } )
@@ -1928,6 +1974,22 @@ export function createApp() {
 		map.on( "click", "metro-entrances", event => showMetroPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
 		map.on( "click", "transit-stops", event => showTransitPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
 		map.on( "click", "demand-points", event => showDemandPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
+		map.on( "click", "ai-evidence-points", event => {
+			const evidence = event.features[ 0 ]
+			const descriptions = {
+				threat: "Brand kuchi, masofa va xizmat hududi kesishuvi sabab eng katta raqobat ta’siri shu nuqtadan kelmoqda.",
+				demand: "Bu obyekt yaqin atrofdagi eng kuchli mijoz oqimi signalidir.",
+				metro: "Eng yaqin metro bekati lokatsiyaning piyoda oqimi imkoniyatini ko‘rsatadi.",
+				road: "Asosiy yo‘lga eng yaqin nuqta avtomobil oqimi va ko‘rinuvchanlik uchun proksi sifatida ishlatiladi.",
+			}
+			const content = document.createElement( "div" )
+			content.className = "h3-popup__content"
+			content.innerHTML = `<span>AI DALILI</span><strong>${ evidence.properties.label }</strong><p>${ formatDistance( evidence.properties.distance ) } masofada</p><small>${ descriptions[ evidence.properties.kind ] }</small>`
+			activePopup?.remove()
+			activePopup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: true, offset: 16, className: "h3-popup" } ).setLngLat( evidence.geometry.coordinates ).setDOMContent( content ).addTo( map )
+		} )
+		map.on( "mouseenter", "ai-evidence-points", () => map.getCanvas().style.cursor = "pointer" )
+		map.on( "mouseleave", "ai-evidence-points", () => map.getCanvas().style.cursor = "default" )
 		map.on( "click", "demand-clusters", event => map.easeTo( { center: event.features[ 0 ].geometry.coordinates, zoom: Math.min( 16, map.getZoom() + 2 ), duration: 500 } ) )
 		map.on( "click", "road-flow-lines", event => showRoadPopup( event.features[ 0 ], event.lngLat ) )
 		map.on( "click", "h3-opportunity-fill", event => {
