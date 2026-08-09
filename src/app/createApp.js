@@ -34,6 +34,12 @@ const workflows = {
 		description: "Eng yaxshi lokatsiyalar qidiriladigan hudud markazini tanlang.",
 		action: "Lokatsiyalarni topish",
 	},
+	compare: {
+		label: "Lokatsiyalarni taqqoslash",
+		title: "Ikki lokatsiyani belgilang",
+		description: "A va B nuqtalarni xaritadan tanlang. Ikkalasi bir xil radiusda solishtiriladi.",
+		action: "Lokatsiyalarni taqqoslash",
+	},
 }
 
 const navItems = [
@@ -135,6 +141,7 @@ export function createApp() {
 				<div class="panel-top"><button class="back-button" type="button"><i data-lucide="arrow-left"></i></button><div><span class="eyebrow">YANGI TAHLIL</span><h2 id="workflow-title">Lokatsiyani belgilang</h2></div><button class="close-button" type="button"><i data-lucide="x"></i></button></div>
 				<p id="workflow-description">Xaritadan fast food ochmoqchi bo‘lgan aniq nuqtani tanlang.</p>
 				<div class="step"><span>1</span><div><small>NUQTA</small><strong id="selected-location">Xaritani bosing</strong></div></div>
+				<div class="compare-picker is-hidden"><button type="button" data-compare-slot="a"><span>A</span><div><small>BIRINCHI JOY</small><strong id="compare-location-a">Xaritadan tanlang</strong></div></button><button type="button" data-compare-slot="b"><span>B</span><div><small>IKKINCHI JOY</small><strong id="compare-location-b">Xaritadan tanlang</strong></div></button><p id="compare-picker-help">Avval A lokatsiyani xaritadan belgilang.</p></div>
 				<fieldset class="district-field is-hidden"><legend>Tumanni tanlang</legend><label class="select-wrap"><span><i data-lucide="map-pin"></i></span><select id="district-select"><option value="">Tuman tanlanmagan</option></select></label></fieldset>
 				<fieldset><legend>2 &nbsp; Tahlil radiusi</legend><div class="segments" data-control="radius"><button type="button" data-value="500">500 m</button><button class="is-active" type="button" data-value="1000">1 km</button><button type="button" data-value="2000">2 km</button></div></fieldset>
 				<fieldset><legend>3 &nbsp; Fast food formati</legend><label class="select-wrap"><span><i data-lucide="store"></i></span><select><option>Universal fast food</option><option>Student / budget</option><option>Family fast food</option><option>Delivery-first</option><option>Roadside</option></select></label></fieldset>
@@ -160,6 +167,13 @@ export function createApp() {
 			<section class="page-panel is-hidden" data-panel="page">
 				<button class="close-page" type="button"><i data-lucide="x"></i></button><span class="eyebrow" id="page-eyebrow">WORKSPACE</span><h2 id="page-title">Hisobotlar</h2><p id="page-description"></p><div id="page-content"></div>
 			</section>
+			<section class="comparison-panel is-hidden" data-panel="comparison">
+				<div class="comparison-head"><div><span class="eyebrow">A / B TAQQOSLASH</span><h2>Qaysi lokatsiya kuchliroq?</h2><small id="comparison-radius">Bir xil radiusdagi signallar</small></div><button class="close-comparison" type="button"><i data-lucide="x"></i></button></div>
+				<div class="comparison-verdict"><span>TAVSIYA</span><strong id="comparison-winner">Hisoblanmoqda…</strong><p id="comparison-summary">Ikki lokatsiyaning biznes signallari solishtirilmoqda.</p></div>
+				<div class="comparison-columns"><article class="is-a"><header><span>A</span><div><small>BIRINCHI JOY</small><strong id="comparison-a-coordinate">—</strong></div><b id="comparison-a-score">—</b></header></article><article class="is-b"><header><span>B</span><div><small>IKKINCHI JOY</small><strong id="comparison-b-coordinate">—</strong></div><b id="comparison-b-score">—</b></header></article></div>
+				<div class="comparison-metrics" id="comparison-metrics"></div>
+				<p class="comparison-note">Umumiy ball: 40% raqobat imkoniyati, 20% talab, 15% metro, 15% avtobus va 10% yo‘l signali. Past raqobat bosimi afzal hisoblanadi.</p>
+			</section>
 
 			<div class="map-hint is-hidden"><span><i data-lucide="locate-fixed"></i></span> Xaritadan nuqtani tanlang</div>
 			<div class="brand-filter is-hidden"><span><small>TARMOQ FILTRI</small><strong id="brand-filter-name">EVOS</strong><b id="brand-filter-count">0 ta filial</b></span><button type="button" aria-label="Tarmoq filtrini yopish"><i data-lucide="x"></i></button></div>
@@ -177,6 +191,9 @@ export function createApp() {
 
 	let map
 	let marker
+	let compareMarkers = []
+	let comparePoints = { a: null, b: null }
+	let activeCompareSlot = "a"
 	let radius = 1000
 	let selectedPoint
 	let selectedPoiId
@@ -208,6 +225,7 @@ export function createApp() {
 	const workflow = get( "[data-panel='workflow']" )
 	const report = get( "[data-panel='report']" )
 	const page = get( "[data-panel='page']" )
+	const comparison = get( "[data-panel='comparison']" )
 	const hint = get( ".map-hint" )
 	const action = get( "#primary-action" )
 	const searchInput = get( ".map-search input" )
@@ -231,7 +249,7 @@ export function createApp() {
 	territoryLegend.classList.toggle( "is-collapsed", territoryLegendCollapsed )
 	territoryLegendToggle.setAttribute( "aria-expanded", String( !territoryLegendCollapsed ) )
 
-	const hidePanels = () => [ workflow, report, page ].forEach( panel => panel.classList.add( "is-hidden" ) )
+	const hidePanels = () => [ workflow, report, page, comparison ].forEach( panel => panel.classList.add( "is-hidden" ) )
 	const setActiveNav = view => root.querySelectorAll( ".nav-item" ).forEach( item => item.classList.toggle( "is-active", item.dataset.view === view ) )
 
 	const clearSelection = () => {
@@ -248,9 +266,18 @@ export function createApp() {
 			marker.remove()
 			marker = null
 		}
+		compareMarkers.forEach( compareMarker => compareMarker.remove() )
+		compareMarkers = []
+		comparePoints = { a: null, b: null }
+		activeCompareSlot = "a"
+		get( "#compare-location-a" ).textContent = "Xaritadan tanlang"
+		get( "#compare-location-b" ).textContent = "Xaritadan tanlang"
+		get( "#compare-picker-help" ).textContent = "Avval A lokatsiyani xaritadan belgilang."
+		root.querySelectorAll( "[data-compare-slot]" ).forEach( button => button.classList.toggle( "is-active", button.dataset.compareSlot === "a" ) )
 		if( map?.getSource( "selection-radius" ) ) {
 			map.getSource( "selection-radius" ).setData( { type: "FeatureCollection", features: [] } )
 		}
+		map?.getSource( "comparison-radius" )?.setData( featureCollection( [] ) )
 		clearTerritoryHover()
 		if( map?.getSource( "voronoi-analysis" ) ) {
 			map.getSource( "voronoi-analysis" ).setData( { type: "FeatureCollection", features: [] } )
@@ -285,6 +312,29 @@ export function createApp() {
 		marker = new window.mapboxgl.Marker( { color: "#2388ff" } ).setLngLat( point ).addTo( map )
 		updateRadius()
 	}
+	const selectCompareLocation = point => {
+		comparePoints[ activeCompareSlot ] = { lng: point.lng, lat: point.lat }
+		const slot = activeCompareSlot
+		const previousMarker = compareMarkers.find( item => item.slot === slot )
+		previousMarker?.marker.remove()
+		compareMarkers = compareMarkers.filter( item => item.slot !== slot )
+		const element = document.createElement( "div" )
+		element.className = `compare-marker is-${ slot }`
+		element.textContent = slot.toUpperCase()
+		const compareMarker = new window.mapboxgl.Marker( { element, anchor: "center" } ).setLngLat( point ).addTo( map )
+		compareMarkers.push( { slot, marker: compareMarker } )
+		get( `#compare-location-${ slot }` ).textContent = `${ point.lat.toFixed( 5 ) }, ${ point.lng.toFixed( 5 ) }`
+		if( slot === "a" && !comparePoints.b ) {
+			activeCompareSlot = "b"
+			get( "#compare-picker-help" ).textContent = "Endi B lokatsiyani xaritadan belgilang."
+		}
+		else {
+			get( "#compare-picker-help" ).textContent = "Nuqtani almashtirish uchun A yoki B kartasini bosing."
+		}
+		root.querySelectorAll( "[data-compare-slot]" ).forEach( button => button.classList.toggle( "is-active", button.dataset.compareSlot === activeCompareSlot ) )
+		action.disabled = !( comparePoints.a && comparePoints.b )
+		updateRadius()
+	}
 
 	const startWorkflow = mode => {
 		closeLayerPanel()
@@ -305,9 +355,10 @@ export function createApp() {
 			applyCustomLayerSettings()
 		}
 		get( ".district-field" ).classList.toggle( "is-hidden", mode !== "find" )
-		get( ".step" ).classList.toggle( "is-hidden", mode === "find" )
+		get( ".step" ).classList.toggle( "is-hidden", mode === "find" || mode === "compare" )
+		get( ".compare-picker" ).classList.toggle( "is-hidden", mode !== "compare" )
 		isSelecting = true
-		hint.innerHTML = mode === "find" ? "<span><i data-lucide=\"map-pin\"></i></span> Tumanni xaritadan yoki ro‘yxatdan tanlang" : "<span><i data-lucide=\"locate-fixed\"></i></span> Xaritadan nuqtani tanlang"
+		hint.innerHTML = mode === "find" ? "<span><i data-lucide=\"map-pin\"></i></span> Tumanni xaritadan yoki ro‘yxatdan tanlang" : mode === "compare" ? "<span><i data-lucide=\"locate-fixed\"></i></span> A lokatsiyani belgilang" : "<span><i data-lucide=\"locate-fixed\"></i></span> Xaritadan nuqtani tanlang"
 		createIcons( { icons: { LocateFixed, MapPin }, attrs: { "stroke-width": 1.8 } } )
 		hint.classList.remove( "is-hidden" )
 		setActiveNav( mode )
@@ -358,6 +409,11 @@ export function createApp() {
 	}
 
 	const updateRadius = () => {
+		if( map && activeWorkflow === "compare" && map.getSource( "comparison-radius" ) ) {
+			const features = [ "a", "b" ].flatMap( slot => comparePoints[ slot ] ? [ { ...circleFeature( comparePoints[ slot ], radius ), properties: { slot } } ] : [] )
+			map.getSource( "comparison-radius" ).setData( featureCollection( features ) )
+			return
+		}
 		if( map && selectedPoint && map.getSource( "selection-radius" ) ) {
 			map.getSource( "selection-radius" ).setData( circleFeature( selectedPoint, radius ) )
 		}
@@ -611,6 +667,75 @@ export function createApp() {
 		const accessScore = Math.min( 100, Math.round( ( strongest[ 0 ]?.signal || 0 ) + strongest.slice( 1, 3 ).reduce( ( sum, item ) => sum + item.signal * 0.12, 0 ) ) )
 
 		return { nearby, nearest: nearby[ 0 ] || null, strongest: strongest[ 0 ] || null, accessScore }
+	}
+	const getComparisonSnapshot = location => {
+		const competitors = poiFeatures.map( feature => ( { feature, distance: distanceMeters( location, feature.geometry.coordinates ) } ) )
+			.filter( item => item.distance > 3 ).sort( ( first, second ) => first.distance - second.distance )
+		const within500 = competitors.filter( item => item.distance <= 500 ).length
+		const within1000 = competitors.filter( item => item.distance <= 1000 ).length
+		const within2000 = competitors.filter( item => item.distance <= 2000 ).length
+		const pressureScore = Math.min( 100, Math.round( within500 * 10 + ( within1000 - within500 ) * 3 + ( within2000 - within1000 ) * 0.75 ) )
+		const metro = getMetroContext( location )
+		const transit = getTransitContext( location )
+		const demand = getDemandContext( location )
+		const road = getRoadContext( location )
+		const boundary = circle( [ location.lng, location.lat ], radius / 1000, { steps: 64, units: "kilometers" } )
+		const nearbyPois = competitors.filter( item => item.distance <= radius ).map( item => point( item.feature.geometry.coordinates, { kind: "competitor" } ) )
+		let territoryArea = area( boundary ) / 1000000
+		if( nearbyPois.length ) {
+			const cells = voronoi( featureCollection( [ point( [ location.lng, location.lat ], { kind: "candidate" } ), ...nearbyPois ] ), { bbox: bbox( boundary ) } )
+			const candidateCell = cells.features.find( feature => feature.properties.kind === "candidate" )
+			const clipped = candidateCell ? intersect( featureCollection( [ candidateCell, boundary ] ) ) : null
+			if( clipped ) {
+				territoryArea = area( clipped ) / 1000000
+			}
+		}
+		const district = getDistrictAt( location )
+		const opportunityScore = 100 - pressureScore
+		const overallScore = Math.round( opportunityScore * 0.4 + demand.accessScore * 0.2 + metro.accessScore * 0.15 + transit.accessScore * 0.15 + road.accessScore * 0.1 )
+
+		return { location, overallScore, pressureScore, competitorCount: competitors.filter( item => item.distance <= radius ).length, nearestCompetitor: competitors[ 0 ] || null, territoryArea, metro, transit, demand, road, district }
+	}
+	const renderComparison = () => {
+		const snapshots = { a: getComparisonSnapshot( comparePoints.a ), b: getComparisonSnapshot( comparePoints.b ) }
+		const winner = snapshots.a.overallScore === snapshots.b.overallScore ? null : snapshots.a.overallScore > snapshots.b.overallScore ? "a" : "b"
+		const loser = winner === "a" ? "b" : "a"
+		get( "#comparison-a-coordinate" ).textContent = `${ comparePoints.a.lat.toFixed( 5 ) }, ${ comparePoints.a.lng.toFixed( 5 ) }`
+		get( "#comparison-b-coordinate" ).textContent = `${ comparePoints.b.lat.toFixed( 5 ) }, ${ comparePoints.b.lng.toFixed( 5 ) }`
+		get( "#comparison-a-score" ).textContent = `${ snapshots.a.overallScore }/100`
+		get( "#comparison-b-score" ).textContent = `${ snapshots.b.overallScore }/100`
+		get( "#comparison-radius" ).textContent = `${ radius / 1000 } km radius · bir xil scoring modeli`
+		get( "#comparison-winner" ).textContent = winner ? `${ winner.toUpperCase() } lokatsiya tavsiya etiladi` : "Ikkala lokatsiya teng"
+		const strengths = winner ? [
+			[ "talab oqimi", snapshots[ winner ].demand.accessScore - snapshots[ loser ].demand.accessScore ],
+			[ "metro qulayligi", snapshots[ winner ].metro.accessScore - snapshots[ loser ].metro.accessScore ],
+			[ "avtobus qulayligi", snapshots[ winner ].transit.accessScore - snapshots[ loser ].transit.accessScore ],
+			[ "yo‘l oqimi", snapshots[ winner ].road.accessScore - snapshots[ loser ].road.accessScore ],
+			[ "pastroq raqobat", snapshots[ loser ].pressureScore - snapshots[ winner ].pressureScore ],
+		].filter( item => item[ 1 ] > 0 ).sort( ( first, second ) => second[ 1 ] - first[ 1 ] ).slice( 0, 2 ).map( item => item[ 0 ] ) : []
+		get( "#comparison-summary" ).textContent = winner
+			? `${ winner.toUpperCase() } joy umumiy hisobda ${ snapshots[ winner ].overallScore - snapshots[ loser ].overallScore } ball oldinda${ strengths.length ? `; asosiy ustunligi: ${ strengths.join( " va " ) }` : "" }.`
+			: "Signallar bo‘yicha umumiy natija teng. Ijara, parking va piyoda kirishini joyida tekshirish hal qiluvchi bo‘ladi."
+		const metrics = [
+			{ label: "Raqobat bosimi", note: "Pastroq yaxshi", value: item => `${ item.pressureScore }/100`, raw: item => item.pressureScore, lower: true },
+			{ label: "Raqobatchilar", note: `${ radius / 1000 } km radius`, value: item => `${ item.competitorCount } ta`, raw: item => item.competitorCount, lower: true },
+			{ label: "Talab oqimi", note: "Ta’lim, savdo, ofis va boshqa oqimlar", value: item => `${ item.demand.accessScore }/100`, raw: item => item.demand.accessScore },
+			{ label: "Metro", note: item => item.metro.nearest ? formatDistance( item.metro.nearest.distance ) : "Bekat yo‘q", value: item => `${ item.metro.accessScore }/100`, raw: item => item.metro.accessScore },
+			{ label: "Avtobus", note: item => `${ item.transit.nearby.length } ta bekat`, value: item => `${ item.transit.accessScore }/100`, raw: item => item.transit.accessScore },
+			{ label: "Yo‘l oqimi", note: item => item.road.nearest?.feature.properties.name || "Asosiy yo‘l yo‘q", value: item => `${ item.road.accessScore }/100`, raw: item => item.road.accessScore },
+			{ label: "Xizmat hududi", note: "Voronoi bo‘yicha taxmin", value: item => formatArea( item.territoryArea ), raw: item => item.territoryArea },
+			{ label: "Tuman", note: item => item.district ? `${ formatNumber( item.district.properties.population ) } aholi` : "Chegaradan tashqari", value: item => item.district?.properties.name || "—", raw: () => null },
+		]
+		get( "#comparison-metrics" ).innerHTML = metrics.map( metric => {
+			const firstRaw = metric.raw( snapshots.a )
+			const secondRaw = metric.raw( snapshots.b )
+			const better = firstRaw === null || firstRaw === secondRaw ? null : ( metric.lower ? firstRaw < secondRaw : firstRaw > secondRaw ) ? "a" : "b"
+			const firstNote = typeof metric.note === "function" ? metric.note( snapshots.a ) : metric.note
+			const secondNote = typeof metric.note === "function" ? metric.note( snapshots.b ) : metric.note
+			return `<article><header><strong>${ metric.label }</strong><small>${ typeof metric.note === "string" ? metric.note : "" }</small></header><div class="${ better === "a" ? "is-better" : "" }"><span>A</span><b>${ metric.value( snapshots.a ) }</b><small>${ firstNote }</small></div><div class="${ better === "b" ? "is-better" : "" }"><span>B</span><b>${ metric.value( snapshots.b ) }</b><small>${ secondNote }</small></div></article>`
+		} ).join( "" )
+		comparison.classList.remove( "is-hidden" )
+		map.fitBounds( [ [ Math.min( comparePoints.a.lng, comparePoints.b.lng ), Math.min( comparePoints.a.lat, comparePoints.b.lat ) ], [ Math.max( comparePoints.a.lng, comparePoints.b.lng ), Math.max( comparePoints.a.lat, comparePoints.b.lat ) ] ], { padding: { top: 80, right: window.innerWidth > 800 ? 610 : 40, bottom: 80, left: 80 }, maxZoom: 15, duration: 900 } )
 	}
 	const showMetroConnection = ( location, metro ) => {
 		const features = metro.nearest ? [ {
@@ -1574,6 +1699,7 @@ export function createApp() {
 		map.addSource( "h3-opportunity", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "location-candidates", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "selection-radius", { type: "geojson", data: { type: "FeatureCollection", features: [] } } )
+		map.addSource( "comparison-radius", { type: "geojson", data: featureCollection( [] ) } )
 		map.addSource( "voronoi-analysis", { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "id" } )
 		map.addSource( "voronoi-sites", { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "id" } )
 		map.addLayer( { id: "district-fill", type: "fill", source: "districts", paint: { "fill-color": "#168bd4", "fill-opacity": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 0.14, 13, 0.08, 15, 0.04 ], "fill-emissive-strength": 0.35 } } )
@@ -1591,6 +1717,8 @@ export function createApp() {
 		map.addLayer( { id: "voronoi-site-points", type: "circle", source: "voronoi-sites", paint: { "circle-color": [ "match", [ "get", "kind" ], "candidate", "#ffffff", "#d8e9fb" ], "circle-radius": [ "match", [ "get", "kind" ], "candidate", 8, 6 ], "circle-stroke-color": [ "match", [ "get", "kind" ], "candidate", "#00a8ff", "#547ca9" ], "circle-stroke-width": [ "match", [ "get", "kind" ], "candidate", 3, 2 ], "circle-emissive-strength": 2 } } )
 		map.addLayer( { id: "selection-radius-glow", type: "line", source: "selection-radius", paint: { "line-color": "#168cff", "line-width": 7, "line-blur": 5, "line-opacity": 0.38, "line-emissive-strength": 1.8 } } )
 		map.addLayer( { id: "selection-radius-line", type: "line", source: "selection-radius", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#bcecff", "line-width": 3.5, "line-dasharray": [ 2, 1.6 ], "line-opacity": 1, "line-emissive-strength": 2.2 } } )
+		map.addLayer( { id: "comparison-radius-fill", type: "fill", source: "comparison-radius", paint: { "fill-color": [ "match", [ "get", "slot" ], "a", "#2388ff", "#aa6cff" ], "fill-opacity": 0.08, "fill-emissive-strength": 0.45 } } )
+		map.addLayer( { id: "comparison-radius-line", type: "line", source: "comparison-radius", paint: { "line-color": [ "match", [ "get", "slot" ], "a", "#71c5ff", "#d8a5ff" ], "line-width": 3, "line-dasharray": [ 2, 1.4 ], "line-opacity": 0.95, "line-emissive-strength": 2.1 } } )
 		map.addLayer( { id: "location-candidate-glow", type: "circle", source: "location-candidates", paint: { "circle-color": "#36c7ff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 18, 15, 28 ], "circle-blur": 0.72, "circle-opacity": 0.72, "circle-emissive-strength": 3 } } )
 		map.addLayer( { id: "location-candidates", type: "circle", source: "location-candidates", paint: { "circle-color": [ "interpolate", [ "linear" ], [ "get", "score" ], 50, "#4f85bd", 75, "#42c3ff", 95, "#e8fbff" ], "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 7, 15, 11 ], "circle-stroke-color": "#071525", "circle-stroke-width": 3, "circle-emissive-strength": 2.5 } } )
 		map.addLayer( { id: "road-flow-glow", type: "line", source: "road-flow", layout: { "line-sort-key": [ "get", "flowScore" ] }, paint: { "line-color": [ "interpolate", [ "linear" ], [ "get", "flowScore" ], 45, "#5478b9", 70, "#268cff", 90, "#54ddff", 100, "#d7f9ff" ], "line-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 4, 14, 9 ], "line-blur": 5, "line-opacity": 0.5, "line-emissive-strength": 2.8 } } )
@@ -1615,6 +1743,11 @@ export function createApp() {
 					if( district ) {
 						selectDistrict( district )
 					}
+				}
+				else if( activeWorkflow === "compare" ) {
+					selectCompareLocation( event.lngLat )
+					hint.innerHTML = `<span><i data-lucide="locate-fixed"></i></span> ${ comparePoints.a && !comparePoints.b ? "B lokatsiyani belgilang" : "A yoki B kartasini tanlab nuqtani o‘zgartiring" }`
+					createIcons( { icons: { LocateFixed }, attrs: { "stroke-width": 1.8 } } )
 				}
 				else {
 					selectLocation( event.lngLat )
@@ -1723,7 +1856,7 @@ export function createApp() {
 	} )
 
 	root.querySelectorAll( ".nav-item" ).forEach( button => button.addEventListener( "click", () => {
-		if( [ "analyze", "find" ].includes( button.dataset.view ) ) {
+		if( [ "analyze", "find", "compare" ].includes( button.dataset.view ) ) {
 			startWorkflow( button.dataset.view )
 		}
 		else {
@@ -1734,6 +1867,12 @@ export function createApp() {
 	get( ".close-button" ).addEventListener( "click", showMap )
 	get( ".close-report" ).addEventListener( "click", showMap )
 	get( ".close-page" ).addEventListener( "click", showMap )
+	get( ".close-comparison" ).addEventListener( "click", showMap )
+	root.querySelectorAll( "[data-compare-slot]" ).forEach( button => button.addEventListener( "click", () => {
+		activeCompareSlot = button.dataset.compareSlot
+		root.querySelectorAll( "[data-compare-slot]" ).forEach( item => item.classList.toggle( "is-active", item === button ) )
+		get( "#compare-picker-help" ).textContent = `${ activeCompareSlot.toUpperCase() } lokatsiya uchun xaritadan yangi nuqta tanlang.`
+	} ) )
 	brandFilter.querySelector( "button" ).addEventListener( "click", clearBrandMode )
 	territoryLegendToggle.addEventListener( "click", () => {
 		const collapsed = territoryLegend.classList.toggle( "is-collapsed" )
@@ -1798,6 +1937,11 @@ export function createApp() {
 		layerSettings.roadFlow = true
 		saveLayerSettings()
 		syncLayerControls()
+		if( activeWorkflow === "compare" ) {
+			territoryLegend.classList.add( "is-hidden" )
+			renderComparison()
+			return
+		}
 		if( activeWorkflow === "find" ) {
 			territoryLegend.classList.add( "is-hidden" )
 			findDistrictLocations()
