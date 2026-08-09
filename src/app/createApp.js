@@ -47,6 +47,7 @@ const defaultLayerSettings = {
 	fastFoodHeatmap: true,
 	metro: true,
 	demandGenerators: false,
+	roadFlow: false,
 	serviceAreas: true,
 	districts: true,
 	opportunityMap: true,
@@ -100,6 +101,7 @@ export function createApp() {
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="fastFoodHeatmap"><span><i class="layer-dot is-heatmap"></i><em>Zichlik heatmap’i<small>Fast-food klasterlari</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="metro"><span><i class="layer-dot is-metro"></i><em>Metro bekatlari<small>Bekatlar va kirish nuqtalari</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="demandGenerators"><span><i class="layer-dot is-demand"></i><em>Talab generatorlari<small>Ta’lim, ofis, savdo va boshqa oqimlar</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="roadFlow"><span><i class="layer-dot is-road"></i><em>Yo‘l oqimi<small>Asosiy avtomobil yo‘llari va kuchi</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="serviceAreas"><span><i class="layer-dot is-area"></i><em>Xizmat hududlari<small>Joy tahlilidan keyin ochiladi</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="districts"><span><i class="layer-dot is-district"></i><em>Tumanlar<small>Chegara va tuman nomlari</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="opportunityMap"><span><i class="layer-dot is-h3"></i><em>Imkoniyat xaritasi<small>“Joy topish” natijasidan keyin ochiladi</small></em></span><i></i></button>
@@ -158,7 +160,7 @@ export function createApp() {
 			<div class="brand-filter is-hidden"><span><small>TARMOQ FILTRI</small><strong id="brand-filter-name">EVOS</strong><b id="brand-filter-count">0 ta filial</b></span><button type="button" aria-label="Tarmoq filtrini yopish"><i data-lucide="x"></i></button></div>
 			<div class="territory-legend is-hidden"><strong>Xizmat hududi xaritasi</strong><p><i class="is-candidate"></i><span><b>Yangi lokatsiya</b>Sizning nuqtangiz eng yaqin bo‘lgan hudud</span></p><p><i class="is-competitor"></i><span><b>Raqib hududlari</b>Boshqa fast-food’lar yaqinroq bo‘lgan joylar</span></p><p><i class="is-generator"></i><span><b>Hudud markazi</b>Hududni yaratgan haqiqiy fast-food nuqtasi</span></p><p><i class="is-radius"></i><span><b>Tahlil chegarasi</b>Siz tanlagan radius doirasi</span></p></div>
 			<div class="district-legend is-hidden"><strong id="map-score-legend">Joy imkoniyati</strong><p id="map-score-description">Har bir kichik hududda yangi fast-food ochish alohida hisoblangan.</p><i></i><span><small id="map-score-low">Past</small><small id="map-score-high">Yuqori</small></span></div>
-			<a class="metro-attribution is-hidden" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">Metro © OpenStreetMap contributors</a>
+			<a class="osm-attribution is-hidden" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">© OpenStreetMap contributors</a>
 			<div class="map-tools"><button type="button" data-map-action="in" aria-label="Xaritani kattalashtirish"><i data-lucide="plus"></i></button><button type="button" data-map-action="out" aria-label="Xaritani kichraytirish"><i data-lucide="minus"></i></button></div>
 		</main>
 	` )
@@ -206,9 +208,10 @@ export function createApp() {
 	const districtLegend = get( ".district-legend" )
 	const layersToggle = get( ".layers-toggle" )
 	const layersPanel = get( ".layers-panel" )
-	const metroAttribution = get( ".metro-attribution" )
+	const osmAttribution = get( ".osm-attribution" )
 	let poiLayerLoaded = false
 	let metroLayerLoaded = false
+	let roadLayerLoaded = false
 	let metroLayerPromise
 	let demandLayerPromise
 
@@ -377,6 +380,7 @@ export function createApp() {
 		setLayerVisibility( [ "fast-food-point-glow", "fast-food-points" ], layerSettings.fastFoodPoints )
 		setLayerVisibility( [ "metro-analysis-link-glow", "metro-analysis-link", "metro-station-glow", "metro-stations", "metro-station-labels", "metro-entrances" ], layerSettings.metro )
 		setLayerVisibility( [ "demand-clusters-glow", "demand-clusters", "demand-cluster-count", "demand-points" ], layerSettings.demandGenerators )
+		setLayerVisibility( [ "road-flow-glow", "road-flow-lines" ], layerSettings.roadFlow )
 		setLayerVisibility( [ "voronoi-analysis-fill", "voronoi-analysis-glow", "voronoi-analysis-line", "voronoi-site-glow", "voronoi-site-points" ], layerSettings.serviceAreas )
 		setLayerVisibility( [ "district-fill", "district-line-glow", "district-line", "district-selected" ], layerSettings.districts )
 		setLayerVisibility( [ "district-labels" ], layerSettings.districts && opportunityFeatures.length === 0 )
@@ -384,7 +388,7 @@ export function createApp() {
 		setLayerVisibility( [ "h3-opportunity-fill", "h3-opportunity-line" ], layerSettings.opportunityMap && opportunityFeatures.length > 0 )
 		territoryLegend.classList.toggle( "is-hidden", !layerSettings.serviceAreas || territoryFeatures.length === 0 )
 		districtLegend.classList.toggle( "is-hidden", !layerSettings.opportunityMap || opportunityFeatures.length === 0 || territoryFeatures.length > 0 )
-		metroAttribution.classList.toggle( "is-hidden", !layerSettings.metro || !metroLayerLoaded )
+		osmAttribution.classList.toggle( "is-hidden", !( layerSettings.metro && metroLayerLoaded ) && !( layerSettings.roadFlow && roadLayerLoaded ) )
 	}
 	const syncLayerControls = () => get( ".layers-panel" ).querySelectorAll( "[data-layer-setting]" ).forEach( button => {
 		const enabled = Boolean( layerSettings[ button.dataset.layerSetting ] )
@@ -1177,6 +1181,37 @@ export function createApp() {
 			console.error( error )
 		}
 	}
+	const showRoadPopup = ( feature, lngLat ) => {
+		activePopup?.remove()
+		const properties = feature.properties
+		const content = document.createElement( "div" )
+		const eyebrow = document.createElement( "span" )
+		const name = document.createElement( "strong" )
+		const description = document.createElement( "p" )
+		const note = document.createElement( "small" )
+		content.className = "road-popup__content"
+		eyebrow.textContent = "YO‘L OQIMI PROKSI"
+		name.textContent = properties.name
+		description.textContent = `${ properties.roadClassLabel } · ${ properties.lanes ? `${ properties.lanes } qator · ` : "" }${ properties.maxspeed } km/soat`
+		note.textContent = `${ properties.flowScore }/100 — yo‘l turi, qatorlar va tezlik asosidagi taxminiy signal. Bu real trafik o‘lchovi emas.`
+		content.append( eyebrow, name, description, note )
+		activePopup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: true, offset: 10, maxWidth: "320px", className: "road-popup" } )
+			.setLngLat( lngLat ).setDOMContent( content ).addTo( map )
+	}
+	const loadRoadLayer = async() => {
+		try {
+			const response = await fetch( "/data/roads-scoring.geojson" )
+			if( !response.ok ) {
+				throw new Error( `Road data request failed: ${ response.status }` )
+			}
+			map.getSource( "road-flow" ).setData( await response.json() )
+			roadLayerLoaded = true
+			applyCustomLayerSettings()
+		}
+		catch( error ) {
+			console.error( error )
+		}
+	}
 
 	const loadMetroLayer = async() => {
 		try {
@@ -1367,6 +1402,7 @@ export function createApp() {
 		map.addSource( "metro-entrances", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "metro-analysis-link", { type: "geojson", data: featureCollection( [] ) } )
 		map.addSource( "demand-generators", { type: "geojson", data: featureCollection( [] ), promoteId: "id", cluster: true, clusterMaxZoom: 14, clusterRadius: 42 } )
+		map.addSource( "road-flow", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "h3-opportunity", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "location-candidates", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "selection-radius", { type: "geojson", data: { type: "FeatureCollection", features: [] } } )
@@ -1389,6 +1425,8 @@ export function createApp() {
 		map.addLayer( { id: "selection-radius-line", type: "line", source: "selection-radius", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#bcecff", "line-width": 3.5, "line-dasharray": [ 2, 1.6 ], "line-opacity": 1, "line-emissive-strength": 2.2 } } )
 		map.addLayer( { id: "location-candidate-glow", type: "circle", source: "location-candidates", paint: { "circle-color": "#36c7ff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 18, 15, 28 ], "circle-blur": 0.72, "circle-opacity": 0.72, "circle-emissive-strength": 3 } } )
 		map.addLayer( { id: "location-candidates", type: "circle", source: "location-candidates", paint: { "circle-color": [ "interpolate", [ "linear" ], [ "get", "score" ], 50, "#4f85bd", 75, "#42c3ff", 95, "#e8fbff" ], "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 7, 15, 11 ], "circle-stroke-color": "#071525", "circle-stroke-width": 3, "circle-emissive-strength": 2.5 } } )
+		map.addLayer( { id: "road-flow-glow", type: "line", source: "road-flow", layout: { "line-sort-key": [ "get", "flowScore" ] }, paint: { "line-color": [ "interpolate", [ "linear" ], [ "get", "flowScore" ], 45, "#5478b9", 70, "#268cff", 90, "#54ddff", 100, "#d7f9ff" ], "line-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 4, 14, 9 ], "line-blur": 5, "line-opacity": 0.5, "line-emissive-strength": 2.8 } } )
+		map.addLayer( { id: "road-flow-lines", type: "line", source: "road-flow", layout: { "line-cap": "round", "line-join": "round", "line-sort-key": [ "get", "flowScore" ] }, paint: { "line-color": [ "interpolate", [ "linear" ], [ "get", "flowScore" ], 45, "#6688bc", 70, "#4ea5ff", 90, "#8beaff", 100, "#efffff" ], "line-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 1, 14, 3.2 ], "line-opacity": 0.94, "line-emissive-strength": 2.1 } } )
 		map.addLayer( { id: "demand-clusters-glow", type: "circle", source: "demand-generators", filter: [ "has", "point_count" ], paint: { "circle-color": "#8a75ff", "circle-radius": [ "step", [ "get", "point_count" ], 18, 50, 25, 250, 34 ], "circle-blur": 0.72, "circle-opacity": 0.66, "circle-emissive-strength": 2.7 } } )
 		map.addLayer( { id: "demand-clusters", type: "circle", source: "demand-generators", filter: [ "has", "point_count" ], paint: { "circle-color": [ "step", [ "get", "point_count" ], "#4b64bd", 50, "#6759d4", 250, "#845ee8" ], "circle-radius": [ "step", [ "get", "point_count" ], 12, 50, 17, 250, 23 ], "circle-stroke-color": "#d9d4ff", "circle-stroke-width": 1.5, "circle-emissive-strength": 2 } } )
 		map.addLayer( { id: "demand-cluster-count", type: "symbol", source: "demand-generators", filter: [ "has", "point_count" ], layout: { "text-field": [ "get", "point_count_abbreviated" ], "text-size": 10 }, paint: { "text-color": "#ffffff", "text-halo-color": "rgba(24, 17, 55, .7)", "text-halo-width": 1, "text-emissive-strength": 1.6 } } )
@@ -1435,12 +1473,13 @@ export function createApp() {
 		map.on( "click", "metro-entrances", event => showMetroPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
 		map.on( "click", "demand-points", event => showDemandPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
 		map.on( "click", "demand-clusters", event => map.easeTo( { center: event.features[ 0 ].geometry.coordinates, zoom: Math.min( 16, map.getZoom() + 2 ), duration: 500 } ) )
+		map.on( "click", "road-flow-lines", event => showRoadPopup( event.features[ 0 ], event.lngLat ) )
 		map.on( "click", "h3-opportunity-fill", event => {
 			if( map.queryRenderedFeatures( event.point, { layers: [ "location-candidates" ] } ).length === 0 ) {
 				showH3Popup( event.features[ 0 ], event.lngLat )
 			}
 		} )
-		;[ "district-fill", "h3-opportunity-fill", "location-candidates", "metro-stations", "metro-entrances", "demand-points", "demand-clusters" ].forEach( layerId => {
+		;[ "district-fill", "h3-opportunity-fill", "location-candidates", "metro-stations", "metro-entrances", "demand-points", "demand-clusters", "road-flow-lines" ].forEach( layerId => {
 			map.on( "mouseenter", layerId, () => map.getCanvas().style.cursor = "pointer" )
 			map.on( "mouseleave", layerId, () => map.getCanvas().style.cursor = "default" )
 		} )
@@ -1464,6 +1503,7 @@ export function createApp() {
 		loadBoundaryData()
 		metroLayerPromise = loadMetroLayer()
 		demandLayerPromise = loadDemandLayer()
+		loadRoadLayer()
 		loadPoiLayer()
 	} )
 

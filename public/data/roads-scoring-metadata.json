@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-08-09T19:26:35.120Z",
+  "featureCount": 7464,
+  "inputFeatureCount": 70411,
+  "excludedFeatureCount": 62947,
+  "countsByClass": {
+    "primary": 1970,
+    "secondary": 1994,
+    "trunk_link": 542,
+    "tertiary": 1255,
+    "trunk": 822,
+    "primary_link": 618,
+    "secondary_link": 221,
+    "tertiary_link": 42
+  },
+  "scoreMethod": "OSM road class baseline with lane and speed bonuses; proxy, not measured traffic",
+  "source": "© OpenStreetMap contributors",
+  "license": "ODbL-1.0",
+  "sourceUrl": "https://www.openstreetmap.org/copyright"
+}
