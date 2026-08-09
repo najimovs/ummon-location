@@ -9,6 +9,7 @@
 		"preview": "vite preview",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
+		"data:build-metro": "node scripts/buildMetroDataset.js",
 		"poi:analyze": "node scripts/analyzePoi.js",
 		"poi:audit-fast-food": "node scripts/auditFastFoodCategories.js",
 		"poi:normalize-fast-food": "node scripts/buildNormalizedFastFood.js",

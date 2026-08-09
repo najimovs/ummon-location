@@ -45,6 +45,7 @@ const navItems = [
 const defaultLayerSettings = {
 	fastFoodPoints: true,
 	fastFoodHeatmap: true,
+	metro: true,
 	serviceAreas: true,
 	districts: true,
 	opportunityMap: true,
@@ -96,6 +97,7 @@ export function createApp() {
 					<div class="layer-group"><b>Ummon data</b>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="fastFoodPoints"><span><i class="layer-dot is-poi"></i><em>Fast-food nuqtalari<small>Restoran va tarmoq manzillari</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="fastFoodHeatmap"><span><i class="layer-dot is-heatmap"></i><em>Zichlik heatmap’i<small>Fast-food klasterlari</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="metro"><span><i class="layer-dot is-metro"></i><em>Metro bekatlari<small>Bekatlar va kirish nuqtalari</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="serviceAreas"><span><i class="layer-dot is-area"></i><em>Xizmat hududlari<small>Joy tahlilidan keyin ochiladi</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="districts"><span><i class="layer-dot is-district"></i><em>Tumanlar<small>Chegara va tuman nomlari</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="opportunityMap"><span><i class="layer-dot is-h3"></i><em>Imkoniyat xaritasi<small>“Joy topish” natijasidan keyin ochiladi</small></em></span><i></i></button>
@@ -152,6 +154,7 @@ export function createApp() {
 			<div class="brand-filter is-hidden"><span><small>TARMOQ FILTRI</small><strong id="brand-filter-name">EVOS</strong><b id="brand-filter-count">0 ta filial</b></span><button type="button" aria-label="Tarmoq filtrini yopish"><i data-lucide="x"></i></button></div>
 			<div class="territory-legend is-hidden"><strong>Xizmat hududi xaritasi</strong><p><i class="is-candidate"></i><span><b>Yangi lokatsiya</b>Sizning nuqtangiz eng yaqin bo‘lgan hudud</span></p><p><i class="is-competitor"></i><span><b>Raqib hududlari</b>Boshqa fast-food’lar yaqinroq bo‘lgan joylar</span></p><p><i class="is-generator"></i><span><b>Hudud markazi</b>Hududni yaratgan haqiqiy fast-food nuqtasi</span></p><p><i class="is-radius"></i><span><b>Tahlil chegarasi</b>Siz tanlagan radius doirasi</span></p></div>
 			<div class="district-legend is-hidden"><strong id="map-score-legend">Joy imkoniyati</strong><p id="map-score-description">Har bir kichik hududda yangi fast-food ochish alohida hisoblangan.</p><i></i><span><small id="map-score-low">Past</small><small id="map-score-high">Yuqori</small></span></div>
+			<a class="metro-attribution is-hidden" href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">Metro © OpenStreetMap contributors</a>
 			<div class="map-tools"><button type="button" data-map-action="in" aria-label="Xaritani kattalashtirish"><i data-lucide="plus"></i></button><button type="button" data-map-action="out" aria-label="Xaritani kichraytirish"><i data-lucide="minus"></i></button></div>
 		</main>
 	` )
@@ -196,7 +199,9 @@ export function createApp() {
 	const districtLegend = get( ".district-legend" )
 	const layersToggle = get( ".layers-toggle" )
 	const layersPanel = get( ".layers-panel" )
+	const metroAttribution = get( ".metro-attribution" )
 	let poiLayerLoaded = false
+	let metroLayerLoaded = false
 
 	const hidePanels = () => [ workflow, report, page ].forEach( panel => panel.classList.add( "is-hidden" ) )
 	const setActiveNav = view => root.querySelectorAll( ".nav-item" ).forEach( item => item.classList.toggle( "is-active", item.dataset.view === view ) )
@@ -360,6 +365,7 @@ export function createApp() {
 		}
 		setLayerVisibility( [ "fast-food-heatmap" ], layerSettings.fastFoodHeatmap )
 		setLayerVisibility( [ "fast-food-point-glow", "fast-food-points" ], layerSettings.fastFoodPoints )
+		setLayerVisibility( [ "metro-station-glow", "metro-stations", "metro-station-labels", "metro-entrances" ], layerSettings.metro )
 		setLayerVisibility( [ "voronoi-analysis-fill", "voronoi-analysis-glow", "voronoi-analysis-line", "voronoi-site-glow", "voronoi-site-points" ], layerSettings.serviceAreas )
 		setLayerVisibility( [ "district-fill", "district-line-glow", "district-line", "district-selected" ], layerSettings.districts )
 		setLayerVisibility( [ "district-labels" ], layerSettings.districts && opportunityFeatures.length === 0 )
@@ -367,6 +373,7 @@ export function createApp() {
 		setLayerVisibility( [ "h3-opportunity-fill", "h3-opportunity-line" ], layerSettings.opportunityMap && opportunityFeatures.length > 0 )
 		territoryLegend.classList.toggle( "is-hidden", !layerSettings.serviceAreas || territoryFeatures.length === 0 )
 		districtLegend.classList.toggle( "is-hidden", !layerSettings.opportunityMap || opportunityFeatures.length === 0 || territoryFeatures.length > 0 )
+		metroAttribution.classList.toggle( "is-hidden", !layerSettings.metro || !metroLayerLoaded )
 	}
 	const syncLayerControls = () => get( ".layers-panel" ).querySelectorAll( "[data-layer-setting]" ).forEach( button => {
 		const enabled = Boolean( layerSettings[ button.dataset.layerSetting ] )
@@ -1017,6 +1024,46 @@ export function createApp() {
 		searchPanel.hidden = false
 		searchInput.setAttribute( "aria-expanded", "true" )
 	}
+	const showMetroPopup = ( feature, coordinates ) => {
+		activePopup?.remove()
+		const properties = feature.properties
+		const content = document.createElement( "div" )
+		const eyebrow = document.createElement( "span" )
+		const name = document.createElement( "strong" )
+		const description = document.createElement( "p" )
+		const source = document.createElement( "small" )
+		content.className = "metro-popup__content"
+		eyebrow.textContent = properties.stationName ? "METRO KIRISHI" : "METRO BEKATI"
+		name.textContent = properties.stationName || properties.name || "Metro kirishi"
+		description.textContent = properties.stationName
+			? `${ properties.ref ? `${ properties.ref }-kirish · ` : "" }Bekat markazigacha ${ properties.distanceToStationCenter ?? "—" } m`
+			: `${ properties.entranceCount || 0 } ta kirish nuqtasi${ properties.wheelchair !== "unknown" ? ` · Nogironlar aravachasi: ${ properties.wheelchair === "yes" ? "mos" : "cheklangan" }` : "" }`
+		source.textContent = "Manba: OpenStreetMap contributors"
+		content.append( eyebrow, name, description, source )
+		activePopup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: true, offset: 16, maxWidth: "320px", className: "metro-popup" } )
+			.setLngLat( coordinates ).setDOMContent( content ).addTo( map )
+	}
+
+	const loadMetroLayer = async() => {
+		try {
+			const [ stationsResponse, entrancesResponse ] = await Promise.all( [
+				fetch( "/data/metro-stations.geojson" ),
+				fetch( "/data/metro-entrances.geojson" ),
+			] )
+			if( !stationsResponse.ok || !entrancesResponse.ok ) {
+				throw new Error( `Metro data request failed: ${ stationsResponse.status }/${ entrancesResponse.status }` )
+			}
+			const [ stations, entrances ] = await Promise.all( [ stationsResponse.json(), entrancesResponse.json() ] )
+			map.getSource( "metro-stations" ).setData( stations )
+			map.getSource( "metro-entrances" ).setData( entrances )
+			metroLayerLoaded = true
+			applyCustomLayerSettings()
+		}
+		catch( error ) {
+			console.error( error )
+		}
+	}
+
 	const loadBoundaryData = async() => {
 		try {
 			const response = await fetch( "/data/boundaries.geojson" )
@@ -1181,6 +1228,8 @@ export function createApp() {
 		map = event.detail
 		applyBasemapSettings()
 		map.addSource( "districts", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
+		map.addSource( "metro-stations", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
+		map.addSource( "metro-entrances", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "h3-opportunity", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "location-candidates", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "selection-radius", { type: "geojson", data: { type: "FeatureCollection", features: [] } } )
@@ -1203,6 +1252,10 @@ export function createApp() {
 		map.addLayer( { id: "selection-radius-line", type: "line", source: "selection-radius", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#bcecff", "line-width": 3.5, "line-dasharray": [ 2, 1.6 ], "line-opacity": 1, "line-emissive-strength": 2.2 } } )
 		map.addLayer( { id: "location-candidate-glow", type: "circle", source: "location-candidates", paint: { "circle-color": "#36c7ff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 18, 15, 28 ], "circle-blur": 0.72, "circle-opacity": 0.72, "circle-emissive-strength": 3 } } )
 		map.addLayer( { id: "location-candidates", type: "circle", source: "location-candidates", paint: { "circle-color": [ "interpolate", [ "linear" ], [ "get", "score" ], 50, "#4f85bd", 75, "#42c3ff", 95, "#e8fbff" ], "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 7, 15, 11 ], "circle-stroke-color": "#071525", "circle-stroke-width": 3, "circle-emissive-strength": 2.5 } } )
+		map.addLayer( { id: "metro-station-glow", type: "circle", source: "metro-stations", minzoom: 9, paint: { "circle-color": "#50d7ff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 10, 13, 16, 16, 22 ], "circle-blur": 0.72, "circle-opacity": 0.8, "circle-emissive-strength": 3 } } )
+		map.addLayer( { id: "metro-stations", type: "circle", source: "metro-stations", minzoom: 9, paint: { "circle-color": "#071522", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 4.5, 13, 7, 16, 9 ], "circle-stroke-color": "#8be8ff", "circle-stroke-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 2, 15, 3 ], "circle-emissive-strength": 2.4 } } )
+		map.addLayer( { id: "metro-entrances", type: "circle", source: "metro-entrances", minzoom: 14, paint: { "circle-color": "#dffaff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 14, 3, 17, 5 ], "circle-stroke-color": "#168ee8", "circle-stroke-width": 1.5, "circle-emissive-strength": 2 } } )
+		map.addLayer( { id: "metro-station-labels", type: "symbol", source: "metro-stations", minzoom: 11, layout: { "text-field": [ "get", "name" ], "text-size": [ "interpolate", [ "linear" ], [ "zoom" ], 11, 10, 15, 12 ], "text-offset": [ 0, 1.25 ], "text-anchor": "top", "text-allow-overlap": false, "text-padding": 8 }, paint: { "text-color": "#dff8ff", "text-halo-color": "rgba(3, 12, 22, 0.96)", "text-halo-width": 2, "text-halo-blur": 1, "text-emissive-strength": 1.8 } } )
 		map.on( "click", event => {
 			if( isSelecting ) {
 				if( activeWorkflow === "find" ) {
@@ -1235,12 +1288,14 @@ export function createApp() {
 				showCandidatePopup( feature )
 			}
 		} )
+		map.on( "click", "metro-stations", event => showMetroPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
+		map.on( "click", "metro-entrances", event => showMetroPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
 		map.on( "click", "h3-opportunity-fill", event => {
 			if( map.queryRenderedFeatures( event.point, { layers: [ "location-candidates" ] } ).length === 0 ) {
 				showH3Popup( event.features[ 0 ], event.lngLat )
 			}
 		} )
-		;[ "district-fill", "h3-opportunity-fill", "location-candidates" ].forEach( layerId => {
+		;[ "district-fill", "h3-opportunity-fill", "location-candidates", "metro-stations", "metro-entrances" ].forEach( layerId => {
 			map.on( "mouseenter", layerId, () => map.getCanvas().style.cursor = "pointer" )
 			map.on( "mouseleave", layerId, () => map.getCanvas().style.cursor = "default" )
 		} )
@@ -1262,6 +1317,7 @@ export function createApp() {
 		} )
 		applyCustomLayerSettings()
 		loadBoundaryData()
+		loadMetroLayer()
 		loadPoiLayer()
 	} )
 

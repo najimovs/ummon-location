@@ -1,0 +1,11 @@
+{
+  "name": "Tashkent Metro dataset",
+  "fetchedAt": "2026-08-09T18:54:32.770Z",
+  "stationCount": 50,
+  "entranceCount": 144,
+  "unmatchedEntranceCount": 0,
+  "query": "[out:json][timeout:180];\n(\n  nwr[\"railway\"=\"station\"][\"station\"=\"subway\"](41.15,69.10,41.45,69.50);\n  node[\"railway\"=\"subway_entrance\"](41.15,69.10,41.45,69.50);\n);\nout center tags;",
+  "source": "© OpenStreetMap contributors",
+  "license": "ODbL-1.0",
+  "sourceUrl": "https://www.openstreetmap.org/copyright"
+}
