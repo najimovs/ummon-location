@@ -9,7 +9,8 @@
 		"preview": "vite preview",
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
-		"poi:analyze": "node scripts/analyzePoi.js"
+		"poi:analyze": "node scripts/analyzePoi.js",
+		"poi:audit-fast-food": "node scripts/auditFastFoodCategories.js"
 	},
 	"devDependencies": {
 		"vite": "^8.2.0",
