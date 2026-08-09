@@ -302,6 +302,8 @@ export function createApp() {
 		map?.getSource( "location-candidates" )?.setData( featureCollection( [] ) )
 		map?.getSource( "h3-opportunity" )?.setData( featureCollection( [] ) )
 		map?.getSource( "metro-analysis-link" )?.setData( featureCollection( [] ) )
+		map?.getSource( "metro-analysis-station" )?.setData( featureCollection( [] ) )
+		map?.getSource( "transit-analysis-stop" )?.setData( featureCollection( [] ) )
 		map?.getSource( "ai-evidence" )?.setData( featureCollection( [] ) )
 		if( map?.getLayer( "district-selected" ) ) {
 			map.setFilter( "district-selected", [ "==", [ "get", "id" ], "" ] )
@@ -532,8 +534,8 @@ export function createApp() {
 	} )
 	const focusLayerGroups = {
 		poi: [ "fast-food-heatmap", "fast-food-point-glow", "fast-food-points" ],
-		metro: [ "metro-analysis-link-glow", "metro-analysis-link", "metro-station-glow", "metro-stations", "metro-station-labels", "metro-entrances" ],
-		transit: [ "transit-stop-glow", "transit-stops", "transit-stop-labels" ],
+		metro: [ "metro-analysis-link-glow", "metro-analysis-link", "metro-station-glow", "metro-active-glow", "metro-stations", "metro-active-station", "metro-station-labels", "metro-active-label", "metro-entrances" ],
+		transit: [ "transit-stop-glow", "transit-active-glow", "transit-stops", "transit-active-stop", "transit-stop-labels", "transit-active-label" ],
 		demand: [ "demand-clusters-glow", "demand-clusters", "demand-cluster-count", "demand-points" ],
 		roads: [ "road-flow-glow", "road-flow-lines" ],
 		service: [ "voronoi-analysis-fill", "voronoi-analysis-glow", "voronoi-analysis-line", "voronoi-site-glow", "voronoi-site-points" ],
@@ -562,6 +564,8 @@ export function createApp() {
 			;[ "metro", "transit", "demand", "roads", "opportunity", "districts" ].forEach( group => setLayerVisibility( focusLayerGroups[ group ], false ) )
 			setLayerVisibility( focusLayerGroups.service, true )
 			setLayerVisibility( focusLayerGroups.evidence, true )
+			setLayerVisibility( [ "metro-active-glow", "metro-active-station", "metro-active-label" ], true )
+			setLayerVisibility( [ "transit-active-glow", "transit-active-stop", "transit-active-label" ], true )
 		}
 		else if( focusMode === "find-results" ) {
 			;[ "poi", "metro", "transit", "demand", "roads", "service", "districts" ].forEach( group => setLayerVisibility( focusLayerGroups[ group ], false ) )
@@ -621,8 +625,8 @@ export function createApp() {
 		}
 		setLayerVisibility( [ "fast-food-heatmap" ], layerSettings.fastFoodHeatmap )
 		setLayerVisibility( [ "fast-food-point-glow", "fast-food-points" ], layerSettings.fastFoodPoints )
-		setLayerVisibility( [ "metro-analysis-link-glow", "metro-analysis-link", "metro-station-glow", "metro-stations", "metro-station-labels", "metro-entrances" ], layerSettings.metro )
-		setLayerVisibility( [ "transit-stop-glow", "transit-stops", "transit-stop-labels" ], layerSettings.transitStops )
+		setLayerVisibility( [ "metro-analysis-link-glow", "metro-analysis-link", "metro-station-glow", "metro-active-glow", "metro-stations", "metro-active-station", "metro-station-labels", "metro-active-label", "metro-entrances" ], layerSettings.metro )
+		setLayerVisibility( [ "transit-stop-glow", "transit-active-glow", "transit-stops", "transit-active-stop", "transit-stop-labels", "transit-active-label" ], layerSettings.transitStops )
 		setLayerVisibility( [ "demand-clusters-glow", "demand-clusters", "demand-cluster-count", "demand-points" ], layerSettings.demandGenerators )
 		setLayerVisibility( [ "road-flow-glow", "road-flow-lines" ], layerSettings.roadFlow )
 		setLayerVisibility( [ "voronoi-analysis-fill", "voronoi-analysis-glow", "voronoi-analysis-line", "voronoi-site-glow", "voronoi-site-points" ], layerSettings.serviceAreas )
@@ -929,6 +933,59 @@ export function createApp() {
 			properties: { stationName: metro.nearest.feature.properties.name, distance: metro.nearest.distance },
 		} ] : []
 		map?.getSource( "metro-analysis-link" )?.setData( featureCollection( features ) )
+		map?.getSource( "metro-analysis-station" )?.setData( featureCollection( metro.nearest ? [ metro.nearest.feature ] : [] ) )
+	}
+	const createMetroIcon = active => {
+		const canvas = document.createElement( "canvas" )
+		canvas.width = 64
+		canvas.height = 64
+		const context = canvas.getContext( "2d" )
+		context.shadowColor = active ? "rgba(68, 210, 255, .95)" : "rgba(41, 176, 255, .65)"
+		context.shadowBlur = active ? 12 : 7
+		context.beginPath()
+		context.arc( 32, 32, active ? 24 : 21, 0, Math.PI * 2 )
+		context.fillStyle = active ? "#f4fcff" : "#071b2b"
+		context.fill()
+		context.shadowBlur = 0
+		context.lineWidth = active ? 5 : 4
+		context.strokeStyle = active ? "#40cfff" : "#75e4ff"
+		context.stroke()
+		context.fillStyle = active ? "#0878c9" : "#e9fbff"
+		context.font = "700 25px Manrope, Arial, sans-serif"
+		context.textAlign = "center"
+		context.textBaseline = "middle"
+		context.fillText( "M", 32, 34 )
+		return context.getImageData( 0, 0, 64, 64 )
+	}
+	const createTransitIcon = active => {
+		const canvas = document.createElement( "canvas" )
+		canvas.width = 64
+		canvas.height = 64
+		const context = canvas.getContext( "2d" )
+		context.shadowColor = active ? "rgba(72, 242, 179, .95)" : "rgba(58, 218, 163, .65)"
+		context.shadowBlur = active ? 12 : 7
+		context.beginPath()
+		context.arc( 32, 32, active ? 24 : 21, 0, Math.PI * 2 )
+		context.fillStyle = active ? "#effff9" : "#08251e"
+		context.fill()
+		context.shadowBlur = 0
+		context.lineWidth = active ? 5 : 4
+		context.strokeStyle = active ? "#48e6ad" : "#79f4c7"
+		context.stroke()
+		context.fillStyle = active ? "#07855c" : "#e8fff6"
+		context.beginPath()
+		context.roundRect( 21, 20, 22, 25, 5 )
+		context.fill()
+		context.fillStyle = active ? "#eafff7" : "#0b4032"
+		context.fillRect( 24, 24, 16, 8 )
+		context.beginPath()
+		context.arc( 26, 45, 3, 0, Math.PI * 2 )
+		context.arc( 38, 45, 3, 0, Math.PI * 2 )
+		context.fill()
+		return context.getImageData( 0, 0, 64, 64 )
+	}
+	const showTransitHighlight = transit => {
+		map?.getSource( "transit-analysis-stop" )?.setData( featureCollection( transit.nearest ? [ transit.nearest.feature ] : [] ) )
 	}
 	const showAiEvidence = ( location, signals ) => {
 		const origin = [ location.lng, location.lat ]
@@ -1045,6 +1102,7 @@ export function createApp() {
 		const demand = getDemandContext( selectedPoint )
 		const road = getRoadContext( selectedPoint )
 		showMetroConnection( selectedPoint, metro )
+		showTransitHighlight( transit )
 		showAiEvidence( selectedPoint, { topThreat, demand, metro, road } )
 		const insight = pressureScore >= 70
 			? "Bu hududda fast-food klasteri shakllangan. Talab signali bo‘lishi mumkin, ammo yangi biznes aniq format va kuchli differensiatsiya bilan kirishi kerak."
@@ -1924,11 +1982,21 @@ export function createApp() {
 	window.addEventListener( "ummon:map-ready", event => {
 		map = event.detail
 		applyBasemapSettings()
+		if( !map.hasImage( "metro-icon" ) ) {
+			map.addImage( "metro-icon", createMetroIcon( false ), { pixelRatio: 2 } )
+			map.addImage( "metro-icon-active", createMetroIcon( true ), { pixelRatio: 2 } )
+		}
+		if( !map.hasImage( "transit-icon" ) ) {
+			map.addImage( "transit-icon", createTransitIcon( false ), { pixelRatio: 2 } )
+			map.addImage( "transit-icon-active", createTransitIcon( true ), { pixelRatio: 2 } )
+		}
 		map.addSource( "districts", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "metro-stations", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "metro-entrances", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "metro-analysis-link", { type: "geojson", data: featureCollection( [] ) } )
+		map.addSource( "metro-analysis-station", { type: "geojson", data: featureCollection( [] ) } )
 		map.addSource( "transit-stops", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
+		map.addSource( "transit-analysis-stop", { type: "geojson", data: featureCollection( [] ) } )
 		map.addSource( "demand-generators", { type: "geojson", data: featureCollection( [] ), promoteId: "id", cluster: true, clusterMaxZoom: 14, clusterRadius: 42 } )
 		map.addSource( "road-flow", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "h3-opportunity", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
@@ -1970,13 +2038,19 @@ export function createApp() {
 		map.addLayer( { id: "demand-points", type: "circle", source: "demand-generators", filter: [ "!", [ "has", "point_count" ] ], paint: { "circle-color": [ "match", [ "get", "category" ], "education", "#9b7cff", "office", "#4f9cff", "retail", "#ff6fb5", "transport", "#55e4ff", "healthcare", "#52d99a", "leisure", "#ffad5c", "hotel", "#d7c3ff", "#8ea5bd" ], "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 11, 4, 16, 7 ], "circle-stroke-color": "#f4f8ff", "circle-stroke-width": 1.2, "circle-opacity": 0.92, "circle-emissive-strength": 2.2 } } )
 		map.addLayer( { id: "metro-analysis-link-glow", type: "line", source: "metro-analysis-link", paint: { "line-color": "#52dcff", "line-width": 10, "line-blur": 7, "line-opacity": 0.55, "line-emissive-strength": 2.8 } } )
 		map.addLayer( { id: "metro-analysis-link", type: "line", source: "metro-analysis-link", layout: { "line-cap": "round" }, paint: { "line-color": "#c4f6ff", "line-width": 2.5, "line-dasharray": [ 2, 1.5 ], "line-opacity": 0.95, "line-emissive-strength": 2.2 } } )
-		map.addLayer( { id: "metro-station-glow", type: "circle", source: "metro-stations", minzoom: 9, paint: { "circle-color": "#50d7ff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 10, 13, 16, 16, 22 ], "circle-blur": 0.72, "circle-opacity": 0.8, "circle-emissive-strength": 3 } } )
-		map.addLayer( { id: "metro-stations", type: "circle", source: "metro-stations", minzoom: 9, paint: { "circle-color": "#071522", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 4.5, 13, 7, 16, 9 ], "circle-stroke-color": "#8be8ff", "circle-stroke-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 2, 15, 3 ], "circle-emissive-strength": 2.4 } } )
+		map.addLayer( { id: "metro-station-glow", type: "circle", source: "metro-stations", minzoom: 9, paint: { "circle-color": "#50d7ff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 10, 13, 16, 16, 22 ], "circle-blur": 0.76, "circle-opacity": 0.62, "circle-emissive-strength": 3 } } )
+		map.addLayer( { id: "metro-active-glow", type: "circle", source: "metro-analysis-station", minzoom: 9, paint: { "circle-color": "#d8fbff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 22, 15, 34 ], "circle-blur": 0.7, "circle-opacity": 0.95, "circle-emissive-strength": 3.5 } } )
+		map.addLayer( { id: "metro-stations", type: "symbol", source: "metro-stations", minzoom: 9, layout: { "icon-image": "metro-icon", "icon-size": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 0.72, 15, 1 ], "icon-allow-overlap": true, "icon-ignore-placement": true } } )
+		map.addLayer( { id: "metro-active-station", type: "symbol", source: "metro-analysis-station", minzoom: 9, layout: { "icon-image": "metro-icon-active", "icon-size": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 1, 15, 1.35 ], "icon-allow-overlap": true, "icon-ignore-placement": true } } )
 		map.addLayer( { id: "metro-entrances", type: "circle", source: "metro-entrances", minzoom: 14, paint: { "circle-color": "#dffaff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 14, 3, 17, 5 ], "circle-stroke-color": "#168ee8", "circle-stroke-width": 1.5, "circle-emissive-strength": 2 } } )
-		map.addLayer( { id: "metro-station-labels", type: "symbol", source: "metro-stations", minzoom: 11, layout: { "text-field": [ "get", "name" ], "text-size": [ "interpolate", [ "linear" ], [ "zoom" ], 11, 10, 15, 12 ], "text-offset": [ 0, 1.25 ], "text-anchor": "top", "text-allow-overlap": false, "text-padding": 8 }, paint: { "text-color": "#dff8ff", "text-halo-color": "rgba(3, 12, 22, 0.96)", "text-halo-width": 2, "text-halo-blur": 1, "text-emissive-strength": 1.8 } } )
-		map.addLayer( { id: "transit-stop-glow", type: "circle", source: "transit-stops", minzoom: 10, layout: { visibility: "none" }, paint: { "circle-color": "#43f0b1", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 7, 15, 13 ], "circle-blur": 0.74, "circle-opacity": 0.68, "circle-emissive-strength": 2.8 } } )
-		map.addLayer( { id: "transit-stops", type: "circle", source: "transit-stops", minzoom: 10, layout: { visibility: "none" }, paint: { "circle-color": "#07251f", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 3, 15, 5.5 ], "circle-stroke-color": "#83ffd2", "circle-stroke-width": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 1.5, 15, 2.5 ], "circle-emissive-strength": 2.3 } } )
-		map.addLayer( { id: "transit-stop-labels", type: "symbol", source: "transit-stops", minzoom: 14, layout: { visibility: "none", "text-field": [ "coalesce", [ "get", "name" ], "Avtobus bekati" ], "text-size": 10, "text-offset": [ 0, 1 ], "text-anchor": "top", "text-allow-overlap": false, "text-padding": 10 }, paint: { "text-color": "#dffff3", "text-halo-color": "rgba(3, 18, 17, .96)", "text-halo-width": 2, "text-halo-blur": 1, "text-emissive-strength": 1.6 } } )
+		map.addLayer( { id: "metro-station-labels", type: "symbol", source: "metro-stations", minzoom: 11, layout: { "text-field": [ "get", "name" ], "text-size": [ "interpolate", [ "linear" ], [ "zoom" ], 11, 10, 15, 12 ], "text-offset": [ 0, 1.65 ], "text-anchor": "top", "text-allow-overlap": false, "text-padding": 8 }, paint: { "text-color": "#dff8ff", "text-halo-color": "rgba(3, 12, 22, 0.96)", "text-halo-width": 2, "text-halo-blur": 1, "text-emissive-strength": 1.8 } } )
+		map.addLayer( { id: "metro-active-label", type: "symbol", source: "metro-analysis-station", minzoom: 9, layout: { "text-field": [ "get", "name" ], "text-size": 12, "text-offset": [ 0, 1.85 ], "text-anchor": "top", "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": "#ffffff", "text-halo-color": "rgba(3, 12, 22, 0.98)", "text-halo-width": 3, "text-halo-blur": 1, "text-emissive-strength": 2.2 } } )
+		map.addLayer( { id: "transit-stop-glow", type: "circle", source: "transit-stops", minzoom: 10, layout: { visibility: "none" }, paint: { "circle-color": "#43f0b1", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 9, 15, 15 ], "circle-blur": 0.76, "circle-opacity": 0.58, "circle-emissive-strength": 2.8 } } )
+		map.addLayer( { id: "transit-active-glow", type: "circle", source: "transit-analysis-stop", minzoom: 9, layout: { visibility: "none" }, paint: { "circle-color": "#baffdf", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 22, 15, 34 ], "circle-blur": 0.7, "circle-opacity": 0.95, "circle-emissive-strength": 3.5 } } )
+		map.addLayer( { id: "transit-stops", type: "symbol", source: "transit-stops", minzoom: 10, layout: { visibility: "none", "icon-image": "transit-icon", "icon-size": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 0.66, 15, 0.92 ], "icon-allow-overlap": true, "icon-ignore-placement": true } } )
+		map.addLayer( { id: "transit-active-stop", type: "symbol", source: "transit-analysis-stop", minzoom: 9, layout: { visibility: "none", "icon-image": "transit-icon-active", "icon-size": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 1, 15, 1.3 ], "icon-allow-overlap": true, "icon-ignore-placement": true } } )
+		map.addLayer( { id: "transit-stop-labels", type: "symbol", source: "transit-stops", minzoom: 14, layout: { visibility: "none", "text-field": [ "coalesce", [ "get", "name" ], "Avtobus bekati" ], "text-size": 10, "text-offset": [ 0, 1.55 ], "text-anchor": "top", "text-allow-overlap": false, "text-padding": 10 }, paint: { "text-color": "#dffff3", "text-halo-color": "rgba(3, 18, 17, .96)", "text-halo-width": 2, "text-halo-blur": 1, "text-emissive-strength": 1.6 } } )
+		map.addLayer( { id: "transit-active-label", type: "symbol", source: "transit-analysis-stop", minzoom: 9, layout: { visibility: "none", "text-field": [ "coalesce", [ "get", "name" ], "Avtobus bekati" ], "text-size": 12, "text-offset": [ 0, 1.8 ], "text-anchor": "top", "text-allow-overlap": true, "text-ignore-placement": true }, paint: { "text-color": "#effff8", "text-halo-color": "rgba(3, 18, 15, .98)", "text-halo-width": 3, "text-halo-blur": 1, "text-emissive-strength": 2.2 } } )
 		map.on( "click", event => {
 			if( isSelecting ) {
 				if( activeWorkflow === "find" ) {
@@ -2015,8 +2089,10 @@ export function createApp() {
 			}
 		} )
 		map.on( "click", "metro-stations", event => showMetroPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
+		map.on( "click", "metro-active-station", event => showMetroPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
 		map.on( "click", "metro-entrances", event => showMetroPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
 		map.on( "click", "transit-stops", event => showTransitPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
+		map.on( "click", "transit-active-stop", event => showTransitPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
 		map.on( "click", "demand-points", event => showDemandPopup( event.features[ 0 ], event.features[ 0 ].geometry.coordinates ) )
 		map.on( "click", "ai-evidence-points", event => {
 			const evidence = event.features[ 0 ]
@@ -2041,7 +2117,7 @@ export function createApp() {
 				showH3Popup( event.features[ 0 ], event.lngLat )
 			}
 		} )
-		;[ "district-fill", "h3-opportunity-fill", "location-candidates", "metro-stations", "metro-entrances", "transit-stops", "demand-points", "demand-clusters", "road-flow-lines" ].forEach( layerId => {
+		;[ "district-fill", "h3-opportunity-fill", "location-candidates", "metro-stations", "metro-active-station", "metro-entrances", "transit-stops", "transit-active-stop", "demand-points", "demand-clusters", "road-flow-lines" ].forEach( layerId => {
 			map.on( "mouseenter", layerId, () => map.getCanvas().style.cursor = "pointer" )
 			map.on( "mouseleave", layerId, () => map.getCanvas().style.cursor = "default" )
 		} )
