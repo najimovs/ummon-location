@@ -139,7 +139,8 @@ export function createApp() {
 				<div class="district-context analysis-only"><span>TUMAN KONTEKSTI</span><strong id="analysis-district">Aniqlanmoqda…</strong><div><p><small>Aholi</small><b id="district-population">—</b></p><p><small>Fast-food</small><b id="district-pois">—</b></p><p><small>10 000 aholiga</small><b id="district-per-capita">—</b></p><p><small>Taqqoslash</small><b id="district-comparison">—</b></p></div></div>
 				<div class="score-block analysis-only"><div class="score-ring"><strong id="competition-score">—</strong><small>/100</small></div><div><span>RAQOBAT BOSIMI</span><strong id="competition-level">Hisoblanmoqda</strong><p id="competition-summary">Radius ichidagi fast-food nuqtalari asosida.</p></div></div>
 				<div class="metric-grid analysis-only"><article><span>Raqobatchilar</span><strong id="competitor-count">—</strong></article><article><span>Tarmoq brendlari</span><strong id="brand-count">—</strong></article><article><span>Eng yaqin raqib</span><strong id="nearest-distance">—</strong></article><article><span>Yetakchi brend</span><strong id="dominant-brand">—</strong></article></div>
-				<div class="find-results"><div class="district-summary"><span>MIJOZ TANLOVI SIMULYATSIYASI</span><strong id="find-district-name">—</strong><p id="find-district-summary">Hisoblanmoqda…</p><div><b id="find-population">—</b><small>Aholi</small><b id="find-density">—</b><small>odam/km²</small><b id="find-pois">—</b><small>Fast-food</small></div></div><div class="simulation-explainer"><strong>Simulyatsiyada nima sodir bo‘ladi?</strong><div><span>1</span><p><b>Hudud bo‘linadi</b>Tuman kichik olti burchakli qismlarga ajratiladi.</p></div><div><span>2</span><p><b>Har bir joy sinab ko‘riladi</b>Shu yerda yangi fast-food ochilsa, odamlar uni tanlash ehtimoli hisoblanadi.</p></div><div><span>3</span><p><b>Eng kuchli joylar saralanadi</b>Aholi, masofa va barcha yaqin raqiblar birgalikda solishtiriladi.</p></div></div><div class="huff-view"><div><button class="is-active" type="button" data-huff-view="opportunity">Eng yaxshi joylar</button><button type="button" data-huff-view="capture" disabled>Tanlangan joy ta’siri</button></div><p id="huff-view-note">Xaritadagi yorqin hududlar yangi fast-food uchun kuchliroq imkoniyatni bildiradi.</p></div><div class="candidate-impact is-hidden" id="candidate-impact"><span>TANLANGAN JOY NATIJASI</span><strong id="impact-score">—</strong><div><p><small>Bozor ulushi</small><b id="impact-share">—</b></p><p><small>Taxminiy mijozlar</small><b id="impact-population">—</b></p><p><small>Eng yaqin raqib</small><b id="impact-nearest">—</b></p></div><p id="impact-brands">Joy tanlanganda uning raqiblarga taxminiy ta’siri ko‘rsatiladi.</p></div><div class="candidate-list" id="candidate-list"></div><p class="model-note"><b>Muhim:</b> bu taxminiy model. Hozir aholi tuman ichidagi kichik hududlarga teng taqsimlanadi. Natija yakuniy biznes kafolati emas, lokatsiyalarni solishtirish uchun qaror signali hisoblanadi.</p></div>
+				<div class="metro-analysis analysis-only"><div><span>METRO QULAYLIGI</span><strong id="metro-access-score">—</strong></div><div><p><small>Eng yaqin bekat</small><b id="nearest-metro-name">—</b><em id="nearest-metro-distance">—</em></p><p><small>Radius ichida</small><b id="metro-count">—</b><em>metro bekati</em></p></div><p id="metro-insight">Metro ma’lumoti yuklanmoqda…</p></div>
+				<div class="find-results"><div class="district-summary"><span>MIJOZ TANLOVI SIMULYATSIYASI</span><strong id="find-district-name">—</strong><p id="find-district-summary">Hisoblanmoqda…</p><div><b id="find-population">—</b><small>Aholi</small><b id="find-density">—</b><small>odam/km²</small><b id="find-pois">—</b><small>Fast-food</small></div></div><div class="simulation-explainer"><strong>Simulyatsiyada nima sodir bo‘ladi?</strong><div><span>1</span><p><b>Hudud bo‘linadi</b>Tuman kichik olti burchakli qismlarga ajratiladi.</p></div><div><span>2</span><p><b>Har bir joy sinab ko‘riladi</b>Shu yerda yangi fast-food ochilsa, odamlar uni tanlash ehtimoli hisoblanadi.</p></div><div><span>3</span><p><b>Eng kuchli joylar saralanadi</b>Mijoz salohiyati, raqiblar va metroga piyoda masofa birgalikda solishtiriladi.</p></div></div><div class="huff-view"><div><button class="is-active" type="button" data-huff-view="opportunity">Eng yaxshi joylar</button><button type="button" data-huff-view="capture" disabled>Tanlangan joy ta’siri</button></div><p id="huff-view-note">Xaritadagi yorqin hududlar yangi fast-food uchun kuchliroq imkoniyatni bildiradi.</p></div><div class="candidate-impact is-hidden" id="candidate-impact"><span>TANLANGAN JOY NATIJASI</span><strong id="impact-score">—</strong><div><p><small>Bozor ulushi</small><b id="impact-share">—</b></p><p><small>Taxminiy mijozlar</small><b id="impact-population">—</b></p><p><small>Eng yaqin raqib</small><b id="impact-nearest">—</b></p></div><p id="impact-brands">Joy tanlanganda uning raqiblarga taxminiy ta’siri ko‘rsatiladi.</p></div><div class="candidate-list" id="candidate-list"></div><p class="model-note"><b>Ball formulasi:</b> 78% mijoz salohiyati + 22% metro qulayligi. Aholi hozircha tuman ichidagi kichik hududlarga teng taqsimlanadi. Natija biznes kafolati emas, lokatsiyalarni solishtirish signalidir.</p></div>
 				<div class="report-section territory-section analysis-only"><div><h3>Taxminiy xizmat hududi</h3><span>Eng yaqin nuqta modeli</span></div><div class="territory-card"><div class="territory-primary"><span>Yangi lokatsiya maydoni</span><strong id="candidate-area">—</strong><small id="territory-share">Umumiy maydonning —</small></div><div class="territory-stats"><p><span>Tanlangan radius</span><b id="analysis-area">—</b></p><p><span>Raqiblar o‘rtachasi</span><b id="average-area">—</b></p><p><span>O‘rtachadan farqi</span><b id="area-comparison">—</b></p></div><div class="territory-bars"><div><span>Yangi nuqta</span><i><em id="candidate-area-bar"></em></i><b id="candidate-area-label">—</b></div><div><span>Raqib o‘rtachasi</span><i><em id="average-area-bar"></em></i><b id="average-area-label">—</b></div></div></div><div class="territory-note" id="territory-insight">Xizmat hududi raqobatchilargacha bo‘lgan to‘g‘ri chiziq masofasi asosida hisoblanadi.</div><div class="territory-explainer"><strong>Bu raqam qanday chiqdi?</strong><ol><li><span>1</span><p><b>Eng yaqin nuqta</b>Hududdagi har bir joy eng yaqin fast-food’ga biriktiriladi.</p></li><li><span>2</span><p><b>Radius bilan kesish</b>Faqat siz tanlagan doira ichidagi maydon qoldiriladi.</p></li><li><span>3</span><p><b>Raqib bilan solishtirish</b>Yangi hudud yaqin raqiblarning o‘rtacha maydoni bilan taqqoslanadi.</p></li></ol></div></div>
 				<div class="report-section analysis-only"><div><h3>Masofa bo‘yicha zichlik</h3><span>Fast food POI</span></div><div class="signal-list"><p><i></i>500 metr ichida <b id="band-500">—</b></p><p><i></i>1 kilometr ichida <b id="band-1000">—</b></p><p><i></i>2 kilometr ichida <b id="band-2000">—</b></p></div></div>
 				<div class="report-section analysis-only"><div><h3>Eng yaqin raqobatchi</h3></div><div class="empty-insight" id="nearest-competitor">Hisoblanmoqda…</div></div>
@@ -172,6 +173,7 @@ export function createApp() {
 	let activeWorkflow
 	let isSelecting = false
 	let poiFeatures = []
+	let metroFeatures = []
 	let searchResults = []
 	let activeSearchIndex = -1
 	let activePopup
@@ -238,6 +240,7 @@ export function createApp() {
 		districtLegend.classList.add( "is-hidden" )
 		map?.getSource( "location-candidates" )?.setData( featureCollection( [] ) )
 		map?.getSource( "h3-opportunity" )?.setData( featureCollection( [] ) )
+		map?.getSource( "metro-analysis-link" )?.setData( featureCollection( [] ) )
 		if( map?.getLayer( "district-selected" ) ) {
 			map.setFilter( "district-selected", [ "==", [ "get", "id" ], "" ] )
 		}
@@ -365,7 +368,7 @@ export function createApp() {
 		}
 		setLayerVisibility( [ "fast-food-heatmap" ], layerSettings.fastFoodHeatmap )
 		setLayerVisibility( [ "fast-food-point-glow", "fast-food-points" ], layerSettings.fastFoodPoints )
-		setLayerVisibility( [ "metro-station-glow", "metro-stations", "metro-station-labels", "metro-entrances" ], layerSettings.metro )
+		setLayerVisibility( [ "metro-analysis-link-glow", "metro-analysis-link", "metro-station-glow", "metro-stations", "metro-station-labels", "metro-entrances" ], layerSettings.metro )
 		setLayerVisibility( [ "voronoi-analysis-fill", "voronoi-analysis-glow", "voronoi-analysis-line", "voronoi-site-glow", "voronoi-site-points" ], layerSettings.serviceAreas )
 		setLayerVisibility( [ "district-fill", "district-line-glow", "district-line", "district-selected" ], layerSettings.districts )
 		setLayerVisibility( [ "district-labels" ], layerSettings.districts && opportunityFeatures.length === 0 )
@@ -449,6 +452,25 @@ export function createApp() {
 		return earthRadius * 2 * Math.atan2( Math.sqrt( value ), Math.sqrt( 1 - value ) )
 	}
 	const formatDistance = distance => distance < 1000 ? `${ Math.round( distance ) } m` : `${ ( distance / 1000 ).toFixed( 1 ) } km`
+	const getMetroContext = ( location, localRadius = radius ) => {
+		const stations = metroFeatures
+			.map( feature => ( { feature, distance: distanceMeters( location, feature.geometry.coordinates ) } ) )
+			.sort( ( first, second ) => first.distance - second.distance )
+		const nearest = stations[ 0 ] ?? null
+		const withinRadius = stations.filter( station => station.distance <= localRadius )
+		const distanceScore = nearest ? Math.max( 0, 100 - nearest.distance / 20 ) : 0
+		const accessScore = Math.min( 100, Math.round( distanceScore + Math.max( 0, withinRadius.length - 1 ) * 6 ) )
+
+		return { nearest, withinRadius, accessScore }
+	}
+	const showMetroConnection = ( location, metro ) => {
+		const features = metro.nearest ? [ {
+			type: "Feature",
+			geometry: { type: "LineString", coordinates: [ [ location.lng, location.lat ], metro.nearest.feature.geometry.coordinates ] },
+			properties: { stationName: metro.nearest.feature.properties.name, distance: metro.nearest.distance },
+		} ] : []
+		map?.getSource( "metro-analysis-link" )?.setData( featureCollection( features ) )
+	}
 	const formatArea = squareKilometers => squareKilometers < 1
 		? `${ new Intl.NumberFormat( "uz-UZ" ).format( Math.round( squareKilometers * 1000000 ) ) } m²`
 		: `${ squareKilometers.toFixed( 2 ) } km²`
@@ -545,6 +567,8 @@ export function createApp() {
 		const pressureScore = Math.min( 100, Math.round( within500.length * 10 + outer1000 * 3 + outer2000 * 0.75 ) )
 		const pressureLevel = pressureScore >= 70 ? "Yuqori" : pressureScore >= 35 ? "O‘rtacha" : "Past"
 		const territory = calculateTerritoryAnalysis()
+		const metro = getMetroContext( selectedPoint )
+		showMetroConnection( selectedPoint, metro )
 		const insight = pressureScore >= 70
 			? "Bu hududda fast-food klasteri shakllangan. Talab signali bo‘lishi mumkin, ammo yangi biznes aniq format va kuchli differensiatsiya bilan kirishi kerak."
 			: pressureScore >= 35
@@ -558,6 +582,17 @@ export function createApp() {
 		get( "#brand-count" ).textContent = brandCounts.size
 		get( "#nearest-distance" ).textContent = nearest ? formatDistance( nearest.distance ) : "—"
 		get( "#dominant-brand" ).textContent = dominantBrand ? `${ dominantBrand.name } · ${ dominantBrand.count }` : "—"
+		get( "#metro-access-score" ).textContent = metro.nearest ? `${ metro.accessScore }/100` : "—"
+		get( "#nearest-metro-name" ).textContent = metro.nearest?.feature.properties.name || "Bekat topilmadi"
+		get( "#nearest-metro-distance" ).textContent = metro.nearest ? formatDistance( metro.nearest.distance ) : "—"
+		get( "#metro-count" ).textContent = metro.withinRadius.length
+		get( "#metro-insight" ).textContent = !metro.nearest
+			? "Metro ma’lumoti mavjud emas; bu signal natijaga qo‘shilmadi."
+			: metro.nearest.distance <= 500
+				? `${ cleanName( metro.nearest.feature.properties.name ) } bekati piyoda borishga yaqin. Bu tushlik va kechki oqim uchun kuchli signal.`
+				: metro.nearest.distance <= 1000
+					? `${ cleanName( metro.nearest.feature.properties.name ) } bekati nisbatan yaqin. Piyoda yo‘li va ko‘cha kesishmalarini joyida tekshirish kerak.`
+					: `Eng yaqin metro ${ formatDistance( metro.nearest.distance ) } masofada. Bu lokatsiyada metro asosiy mijoz oqimi bo‘la olmaydi.`
 		get( "#band-500" ).textContent = within500.length
 		get( "#band-1000" ).textContent = within1000.length
 		get( "#band-2000" ).textContent = within2000.length
@@ -670,7 +705,7 @@ export function createApp() {
 		content.className = "h3-popup__content"
 		content.innerHTML = huffView === "capture"
 			? `<span>TANLANGAN JOY TA’SIRI</span><strong>${ properties.captureScore }%</strong><p>Ushbu kichik hududdagi taxminiy ${ formatNumber( properties.estimatedPopulation ) } aholining yangi fast-food’ni tanlash ehtimoli.</p><small>Foiz qancha yuqori bo‘lsa, yangi nuqta shu yerdan shuncha ko‘p mijoz jalb qilishi mumkin.</small>`
-			: `<span>JOY IMKONIYATI</span><strong>${ properties.opportunityScore }/100</strong><p>Shu yerda fast-food ochish ssenariysi tuman aholisi, masofa va yaqin raqiblar bilan hisoblandi.</p><small>Yuqori ball — nisbatan ko‘proq talab va kamroq raqobat signali.</small>`
+			: `<span>JOY IMKONIYATI</span><strong>${ properties.opportunityScore }/100</strong><p>Shu yerda fast-food ochish ssenariysi mijoz salohiyati, yaqin raqiblar va metro bilan hisoblandi.</p><small>Metro qulayligi: ${ properties.metroScore }/100${ properties.metroName ? ` · ${ formatDistance( properties.metroDistance ) }` : "" }.</small>`
 		activePopup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: true, offset: 10, maxWidth: "310px", className: "h3-popup" } )
 			.setLngLat( lngLat ).setDOMContent( content ).addTo( map )
 	}
@@ -697,6 +732,7 @@ export function createApp() {
 	const selectCandidateScenario = ( feature, focus = true ) => {
 		activeCandidateId = feature.properties.id
 		const coordinates = feature.geometry.coordinates
+		showMetroConnection( { lng: coordinates[ 0 ], lat: coordinates[ 1 ] }, getMetroContext( { lng: coordinates[ 0 ], lat: coordinates[ 1 ] } ) )
 		const brandLosses = new Map()
 		opportunityFeatures.forEach( origin => {
 			const originCenter = { lng: origin.properties.lng, lat: origin.properties.lat }
@@ -740,7 +776,8 @@ export function createApp() {
 		const coordinates = feature.geometry.coordinates
 		const content = document.createElement( "div" )
 		content.className = "candidate-popup__content"
-		content.innerHTML = `<span>#${ feature.properties.rank } · TAVSIYA ETILGAN JOY</span><strong>${ feature.properties.score }/100</strong><p>Taxminiy bozor ulushi ${ feature.properties.marketShare.toFixed( 1 ) }% · ~${ formatNumber( feature.properties.servedPopulation ) } potensial mijoz</p>`
+		const metroText = feature.properties.metroName ? `${ feature.properties.metroName } · ${ formatDistance( feature.properties.metroDistance ) }` : "Metro signali yo‘q"
+		content.innerHTML = `<span>#${ feature.properties.rank } · TAVSIYA ETILGAN JOY</span><strong>${ feature.properties.score }/100</strong><p>Taxminiy bozor ulushi ${ feature.properties.marketShare.toFixed( 1 ) }% · ~${ formatNumber( feature.properties.servedPopulation ) } potensial mijoz</p><small>Metro: ${ metroText } · qulaylik ${ feature.properties.metroScore }/100</small>`
 		const button = document.createElement( "button" )
 		button.type = "button"
 		button.textContent = "Bu nuqtani chuqur tahlil qilish"
@@ -796,21 +833,27 @@ export function createApp() {
 			} )
 			const center = { lng: coordinates[ 0 ], lat: coordinates[ 1 ] }
 			const distances = poiFeatures.map( poi => distanceMeters( center, poi.geometry.coordinates ) ).sort( ( first, second ) => first - second )
-			return { origin, coordinates, servedPopulation, marketShare: servedPopulation / Number( district.properties.population ) * 100, nearby: distances.filter( distance => distance <= radius ).length, nearest: distances[ 0 ] ?? 5000 }
+			const metro = getMetroContext( center )
+			return { origin, coordinates, servedPopulation, marketShare: servedPopulation / Number( district.properties.population ) * 100, nearby: distances.filter( distance => distance <= radius ).length, nearest: distances[ 0 ] ?? 5000, metro }
 		} )
 		const servedValues = scored.map( item => item.servedPopulation )
 		const minimumServed = Math.min( ...servedValues )
 		const servedRange = Math.max( 1, Math.max( ...servedValues ) - minimumServed )
 		scored.forEach( item => {
-			const normalized = ( item.servedPopulation - minimumServed ) / servedRange
-			item.score = Math.round( 35 + normalized * 63 )
+			const demandScore = ( item.servedPopulation - minimumServed ) / servedRange * 100
+			const combinedScore = demandScore * 0.78 + item.metro.accessScore * 0.22
+			item.score = Math.round( 35 + combinedScore / 100 * 63 )
+			item.demandScore = Math.round( demandScore )
 			item.origin.properties.opportunityScore = item.score
 			item.origin.properties.displayScore = item.score
+			item.origin.properties.metroScore = item.metro.accessScore
+			item.origin.properties.metroDistance = item.metro.nearest?.distance ?? null
+			item.origin.properties.metroName = item.metro.nearest?.feature.properties.name || null
 		} )
 		scored.sort( ( first, second ) => second.score - first.score )
 		candidateFeatures = []
 		for( const item of scored ) {
-			const feature = point( item.coordinates, { id: `candidate-${ item.origin.properties.id }`, score: item.score, nearby: item.nearby, nearest: item.nearest, servedPopulation: item.servedPopulation, marketShare: item.marketShare, district: district.properties.name } )
+			const feature = point( item.coordinates, { id: `candidate-${ item.origin.properties.id }`, score: item.score, demandScore: item.demandScore, nearby: item.nearby, nearest: item.nearest, servedPopulation: item.servedPopulation, marketShare: item.marketShare, district: district.properties.name, metroScore: item.metro.accessScore, metroDistance: item.metro.nearest?.distance ?? null, metroName: item.metro.nearest?.feature.properties.name || null } )
 			const farEnough = candidateFeatures.every( candidate => distanceMeters( { lng: feature.geometry.coordinates[ 0 ], lat: feature.geometry.coordinates[ 1 ] }, candidate.geometry.coordinates ) >= 750 )
 			if( farEnough ) {
 				feature.properties.rank = candidateFeatures.length + 1
@@ -830,7 +873,7 @@ export function createApp() {
 		get( "#find-population" ).textContent = formatNumber( district.properties.population )
 		get( "#find-density" ).textContent = formatNumber( district.properties.populationDensity )
 		get( "#find-pois" ).textContent = district.properties.poiCount
-		get( "#find-district-summary" ).textContent = `Tuman ${ opportunityFeatures.length } ta kichik hududga bo‘lindi. Har birida fast-food ochish ssenariysi hisoblanib, ${ candidateFeatures.length } ta eng kuchli joy ajratildi.`
+		get( "#find-district-summary" ).textContent = `Tuman ${ opportunityFeatures.length } ta kichik hududga bo‘lindi. Mijoz salohiyati 78%, metro qulayligi 22% vazn bilan hisoblanib, ${ candidateFeatures.length } ta eng kuchli joy ajratildi.`
 		get( "#map-score-legend" ).textContent = "Joy imkoniyati"
 		get( "#map-score-description" ).textContent = "Har bir kichik hududda yangi fast-food ochish alohida hisoblangan."
 		get( "#map-score-low" ).textContent = "Band"
@@ -844,7 +887,8 @@ export function createApp() {
 			const button = document.createElement( "button" )
 			button.type = "button"
 			button.dataset.candidateId = feature.properties.id
-			button.innerHTML = `<span>${ feature.properties.rank }</span><div><strong>${ feature.properties.score } ball · ${ feature.properties.marketShare.toFixed( 1 ) }% bozor ulushi</strong><small>~${ formatNumber( feature.properties.servedPopulation ) } potensial mijoz · ${ feature.properties.nearby } ta raqib</small></div><b>Ko‘rish</b>`
+			const metroLabel = feature.properties.metroName ? `metro ${ formatDistance( feature.properties.metroDistance ) }` : "metro signali yo‘q"
+			button.innerHTML = `<span>${ feature.properties.rank }</span><div><strong>${ feature.properties.score } ball · ${ feature.properties.marketShare.toFixed( 1 ) }% bozor ulushi</strong><small>~${ formatNumber( feature.properties.servedPopulation ) } potensial mijoz · ${ feature.properties.nearby } ta raqib · ${ metroLabel }</small></div><b>Ko‘rish</b>`
 			button.addEventListener( "click", () => {
 				showCandidatePopup( feature )
 			} )
@@ -1054,6 +1098,7 @@ export function createApp() {
 				throw new Error( `Metro data request failed: ${ stationsResponse.status }/${ entrancesResponse.status }` )
 			}
 			const [ stations, entrances ] = await Promise.all( [ stationsResponse.json(), entrancesResponse.json() ] )
+			metroFeatures = stations.features
 			map.getSource( "metro-stations" ).setData( stations )
 			map.getSource( "metro-entrances" ).setData( entrances )
 			metroLayerLoaded = true
@@ -1230,6 +1275,7 @@ export function createApp() {
 		map.addSource( "districts", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "metro-stations", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "metro-entrances", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
+		map.addSource( "metro-analysis-link", { type: "geojson", data: featureCollection( [] ) } )
 		map.addSource( "h3-opportunity", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "location-candidates", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "selection-radius", { type: "geojson", data: { type: "FeatureCollection", features: [] } } )
@@ -1252,6 +1298,8 @@ export function createApp() {
 		map.addLayer( { id: "selection-radius-line", type: "line", source: "selection-radius", layout: { "line-cap": "round", "line-join": "round" }, paint: { "line-color": "#bcecff", "line-width": 3.5, "line-dasharray": [ 2, 1.6 ], "line-opacity": 1, "line-emissive-strength": 2.2 } } )
 		map.addLayer( { id: "location-candidate-glow", type: "circle", source: "location-candidates", paint: { "circle-color": "#36c7ff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 18, 15, 28 ], "circle-blur": 0.72, "circle-opacity": 0.72, "circle-emissive-strength": 3 } } )
 		map.addLayer( { id: "location-candidates", type: "circle", source: "location-candidates", paint: { "circle-color": [ "interpolate", [ "linear" ], [ "get", "score" ], 50, "#4f85bd", 75, "#42c3ff", 95, "#e8fbff" ], "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 10, 7, 15, 11 ], "circle-stroke-color": "#071525", "circle-stroke-width": 3, "circle-emissive-strength": 2.5 } } )
+		map.addLayer( { id: "metro-analysis-link-glow", type: "line", source: "metro-analysis-link", paint: { "line-color": "#52dcff", "line-width": 10, "line-blur": 7, "line-opacity": 0.55, "line-emissive-strength": 2.8 } } )
+		map.addLayer( { id: "metro-analysis-link", type: "line", source: "metro-analysis-link", layout: { "line-cap": "round" }, paint: { "line-color": "#c4f6ff", "line-width": 2.5, "line-dasharray": [ 2, 1.5 ], "line-opacity": 0.95, "line-emissive-strength": 2.2 } } )
 		map.addLayer( { id: "metro-station-glow", type: "circle", source: "metro-stations", minzoom: 9, paint: { "circle-color": "#50d7ff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 10, 13, 16, 16, 22 ], "circle-blur": 0.72, "circle-opacity": 0.8, "circle-emissive-strength": 3 } } )
 		map.addLayer( { id: "metro-stations", type: "circle", source: "metro-stations", minzoom: 9, paint: { "circle-color": "#071522", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 4.5, 13, 7, 16, 9 ], "circle-stroke-color": "#8be8ff", "circle-stroke-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 2, 15, 3 ], "circle-emissive-strength": 2.4 } } )
 		map.addLayer( { id: "metro-entrances", type: "circle", source: "metro-entrances", minzoom: 14, paint: { "circle-color": "#dffaff", "circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 14, 3, 17, 5 ], "circle-stroke-color": "#168ee8", "circle-stroke-width": 1.5, "circle-emissive-strength": 2 } } )
@@ -1427,6 +1475,9 @@ export function createApp() {
 		hidePanels()
 		report.classList.remove( "is-hidden" )
 		report.classList.toggle( "is-find-report", activeWorkflow === "find" )
+		layerSettings.metro = true
+		saveLayerSettings()
+		syncLayerControls()
 		if( activeWorkflow === "find" ) {
 			territoryLegend.classList.add( "is-hidden" )
 			findDistrictLocations()
