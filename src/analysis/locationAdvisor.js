@@ -10,6 +10,14 @@ export function createLocationAdvice( input ) {
 	const road = clamp( input.road )
 	const territoryRatio = Math.max( 0, Number( input.territoryRatio ) || 0 )
 	const territoryScore = clamp( 45 + ( territoryRatio - 1 ) * 35 )
+	const breakdown = [
+		{ key: "competition", kind: "threat", label: "Raqobat imkoniyati", description: "Brand kuchi, masofa va xizmat zonasi", signal: 100 - competition, weight: 0.3 },
+		{ key: "demand", kind: "demand", label: "Talab oqimi", description: "Yaqindagi mijoz generatorlari", signal: demand, weight: 0.25 },
+		{ key: "metro", kind: "metro", label: "Metro", description: "Bekat masofasi va qamrovi", signal: metro, weight: 0.12 },
+		{ key: "transit", kind: "transit", label: "Avtobus", description: "Bekatlar soni va yaqinligi", signal: transit, weight: 0.15 },
+		{ key: "road", kind: "road", label: "Asosiy yo‘l", description: "Yo‘l oqimi va ko‘rinuvchanlik", signal: road, weight: 0.08 },
+		{ key: "territory", kind: "territory", label: "Xizmat hududi", description: "Raqiblar orasidagi bazaviy maydon", signal: territoryScore, weight: 0.1 },
+	].map( item => ( { ...item, earned: item.signal * item.weight, maximum: 100 * item.weight, impact: ( item.signal - 50 ) * item.weight } ) )
 	const score = clamp( ( 100 - competition ) * 0.3 + demand * 0.25 + metro * 0.12 + transit * 0.15 + road * 0.08 + territoryScore * 0.1 )
 	const transport = Math.max( metro, transit )
 	const format = road >= 72 && transport < 55
@@ -50,7 +58,7 @@ export function createLocationAdvice( input ) {
 					? "Oilaviy setlar, qulay o‘tirish joyi va kechki vaqt servisiga urg‘u bering."
 					: "Menyuni universal saqlang, lekin eng kuchli mahalliy auditoriya uchun bitta aniq ustunlik yarating."
 
-	return { score, verdict, tone, confidence, format, strengths: strengths.length ? strengths : [ "Lokatsiyada muvozanatli bazaviy signallar bor" ], risks: risks.length ? risks : [ "Ijara va real piyoda oqimi joyida tekshirilishi kerak" ], action }
+	return { score, verdict, tone, confidence, format, breakdown, strengths: strengths.length ? strengths : [ "Lokatsiyada muvozanatli bazaviy signallar bor" ], risks: risks.length ? risks : [ "Ijara va real piyoda oqimi joyida tekshirilishi kerak" ], action }
 }
 
 export function createComparisonAdvice( first, second ) {
