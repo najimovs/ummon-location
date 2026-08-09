@@ -1,0 +1,13 @@
+{
+  "generatedAt": "2026-08-09T19:36:45.844Z",
+  "inputFeatureCount": 2162,
+  "selectedRecordCount": 2162,
+  "featureCount": 1403,
+  "namedCount": 1081,
+  "unnamedCount": 322,
+  "mergedRecordCount": 759,
+  "deduplication": "Same normalized name within 80 m; unnamed records within 12 m",
+  "source": "© OpenStreetMap contributors",
+  "license": "ODbL-1.0",
+  "sourceUrl": "https://www.openstreetmap.org/copyright"
+}
