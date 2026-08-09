@@ -10,7 +10,8 @@
 		"lint": "eslint .",
 		"lint:fix": "eslint . --fix",
 		"poi:analyze": "node scripts/analyzePoi.js",
-		"poi:audit-fast-food": "node scripts/auditFastFoodCategories.js"
+		"poi:audit-fast-food": "node scripts/auditFastFoodCategories.js",
+		"poi:normalize-fast-food": "node scripts/buildNormalizedFastFood.js"
 	},
 	"devDependencies": {
 		"vite": "^8.2.0",

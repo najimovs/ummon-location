@@ -4,3 +4,4 @@ dist
 node_modules
 public/poi/
 data/poi-inventory.json
+data/fast-food-normalized.geojson
