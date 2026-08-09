@@ -178,6 +178,7 @@ export function createApp() {
 			</section>
 
 			<div class="map-hint is-hidden"><span><i data-lucide="locate-fixed"></i></span> Xaritadan nuqtani tanlang</div>
+			<button class="focus-reset is-hidden" type="button"><i data-lucide="arrow-left"></i><span>Oldingi ko‘rinish</span></button>
 			<div class="brand-filter is-hidden"><span><small>TARMOQ FILTRI</small><strong id="brand-filter-name">EVOS</strong><b id="brand-filter-count">0 ta filial</b></span><button type="button" aria-label="Tarmoq filtrini yopish"><i data-lucide="x"></i></button></div>
 			<div class="territory-legend is-hidden"><header><strong>Xizmat hududi xaritasi</strong><button class="territory-legend-toggle" type="button" aria-label="Xizmat hududi izohini yig‘ish" aria-expanded="true"><i data-lucide="chevron-down"></i></button></header><div class="territory-legend-content"><p><i class="is-candidate"></i><span><b>Yangi lokatsiya</b>Sizning nuqtangiz eng yaqin bo‘lgan hudud</span></p><p><i class="is-competitor"></i><span><b>Raqib hududlari</b>Boshqa fast-food’lar yaqinroq bo‘lgan joylar</span></p><p><i class="is-generator"></i><span><b>Hudud markazi</b>Hududni yaratgan haqiqiy fast-food nuqtasi</span></p><p><i class="is-radius"></i><span><b>Tahlil chegarasi</b>Siz tanlagan radius doirasi</span></p></div></div>
 			<div class="district-legend is-hidden"><strong id="map-score-legend">Joy imkoniyati</strong><p id="map-score-description">Har bir kichik hududda yangi fast-food ochish alohida hisoblangan.</p><i></i><span><small id="map-score-low">Past</small><small id="map-score-high">Yuqori</small></span></div>
@@ -198,6 +199,9 @@ export function createApp() {
 	let activeCompareSlot = "a"
 	let pendingReport = null
 	let pendingReportSaved = false
+	let focusMode = null
+	let focusCamera = null
+	let analysisFocusPoiIds = []
 	let radius = 1000
 	let selectedPoint
 	let selectedPoiId
@@ -231,6 +235,7 @@ export function createApp() {
 	const page = get( "[data-panel='page']" )
 	const comparison = get( "[data-panel='comparison']" )
 	const hint = get( ".map-hint" )
+	const focusReset = get( ".focus-reset" )
 	const action = get( "#primary-action" )
 	const searchInput = get( ".map-search input" )
 	const searchPanel = get( ".search-results" )
@@ -340,9 +345,12 @@ export function createApp() {
 		updateRadius()
 	}
 
-	const startWorkflow = mode => {
+	const startWorkflow = ( mode, { preserveFocus = false } = {} ) => {
 		closeLayerPanel()
 		activePopup?.remove()
+		if( focusMode && !preserveFocus ) {
+			exitFocusMode( false )
+		}
 		clearBrandMode()
 		activeWorkflow = mode
 		pendingReport = null
@@ -377,6 +385,9 @@ export function createApp() {
 	const showMap = async() => {
 		closeLayerPanel()
 		hidePanels()
+		if( focusMode ) {
+			exitFocusMode( false )
+		}
 		clearSelection()
 		clearBrandMode()
 		setActiveNav( null )
@@ -442,8 +453,9 @@ export function createApp() {
 		}
 		content.innerHTML = `<div class="reports-toolbar"><span><b>${ reports.length }</b> ta saqlangan hisobot</span><button type="button" data-clear-reports>Barchasini o‘chirish</button></div><div class="saved-reports">${ reports.map( savedReport => {
 			const date = new Intl.DateTimeFormat( "uz-UZ", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" } ).format( new Date( savedReport.createdAt ) )
-			return `<article><div class="report-type is-${ escapeHtml( savedReport.type ) }">${ escapeHtml( savedReport.typeLabel ) }</div><header><strong>${ escapeHtml( savedReport.title ) }</strong><button type="button" data-delete-report="${ escapeHtml( savedReport.id ) }" aria-label="Hisobotni o‘chirish">×</button></header><p>${ escapeHtml( savedReport.summary ) }</p><div class="saved-report-metrics">${ ( savedReport.metrics || [] ).map( metric => `<span><small>${ escapeHtml( metric.label ) }</small><b>${ escapeHtml( metric.value ) }</b></span>` ).join( "" ) }</div><footer><span>${ escapeHtml( savedReport.location ) }</span><time>${ date }</time></footer></article>`
+			return `<article><div class="report-type is-${ escapeHtml( savedReport.type ) }">${ escapeHtml( savedReport.typeLabel ) }</div><header><strong>${ escapeHtml( savedReport.title ) }</strong><button type="button" data-delete-report="${ escapeHtml( savedReport.id ) }" aria-label="Hisobotni o‘chirish"><i data-lucide="x"></i></button></header><p>${ escapeHtml( savedReport.summary ) }</p><div class="saved-report-metrics">${ ( savedReport.metrics || [] ).map( metric => `<span><small>${ escapeHtml( metric.label ) }</small><b>${ escapeHtml( metric.value ) }</b></span>` ).join( "" ) }</div><footer><span>${ escapeHtml( savedReport.location ) }</span><time>${ date }</time></footer></article>`
 		} ).join( "" ) }</div>`
+		createIcons( { icons: { X }, attrs: { "stroke-width": 1.8 } } )
 		content.querySelector( "[data-clear-reports]" ).addEventListener( "click", () => {
 			localStorage.removeItem( reportsStorageKey )
 			renderSavedReports()
@@ -501,6 +513,76 @@ export function createApp() {
 			map.setLayoutProperty( layerId, "visibility", visible ? "visible" : "none" )
 		}
 	} )
+	const focusLayerGroups = {
+		poi: [ "fast-food-heatmap", "fast-food-point-glow", "fast-food-points" ],
+		metro: [ "metro-analysis-link-glow", "metro-analysis-link", "metro-station-glow", "metro-stations", "metro-station-labels", "metro-entrances" ],
+		transit: [ "transit-stop-glow", "transit-stops", "transit-stop-labels" ],
+		demand: [ "demand-clusters-glow", "demand-clusters", "demand-cluster-count", "demand-points" ],
+		roads: [ "road-flow-glow", "road-flow-lines" ],
+		service: [ "voronoi-analysis-fill", "voronoi-analysis-glow", "voronoi-analysis-line", "voronoi-site-glow", "voronoi-site-points" ],
+		opportunity: [ "h3-opportunity-fill", "h3-opportunity-line", "location-candidate-glow", "location-candidates" ],
+		districts: [ "district-fill", "district-line-glow", "district-line", "district-selected", "district-labels" ],
+	}
+	const applyFocusMode = () => {
+		if( focusMode === "brand" ) {
+			[ "poi", "metro", "transit", "demand", "roads", "service", "opportunity", "districts" ].forEach( group => setLayerVisibility( focusLayerGroups[ group ], false ) )
+			setBrandLayerVisibility( "visible" )
+		}
+		else if( focusMode === "district" ) {
+			[ "poi", "metro", "transit", "demand", "roads", "service", "opportunity" ].forEach( group => setLayerVisibility( focusLayerGroups[ group ], false ) )
+			setLayerVisibility( focusLayerGroups.districts, true )
+		}
+		else if( focusMode === "analysis" ) {
+			setLayerVisibility( [ "fast-food-heatmap" ], false )
+			setLayerVisibility( [ "fast-food-point-glow", "fast-food-points" ], true )
+			const poiFilter = [ "in", [ "get", "id" ], [ "literal", analysisFocusPoiIds ] ]
+			;[ "fast-food-point-glow", "fast-food-points" ].forEach( layerId => {
+				if( map?.getLayer( layerId ) ) {
+					map.setFilter( layerId, poiFilter )
+				}
+			} )
+			;[ "metro", "transit", "demand", "roads", "opportunity", "districts" ].forEach( group => setLayerVisibility( focusLayerGroups[ group ], false ) )
+			setLayerVisibility( focusLayerGroups.service, true )
+		}
+		else if( focusMode === "find-results" ) {
+			;[ "poi", "metro", "transit", "demand", "roads", "service", "districts" ].forEach( group => setLayerVisibility( focusLayerGroups[ group ], false ) )
+			setLayerVisibility( [ "district-selected" ], true )
+			setLayerVisibility( focusLayerGroups.opportunity, true )
+		}
+	}
+	const enterFocusMode = ( mode, label ) => {
+		if( !focusMode && map ) {
+			focusCamera = { center: map.getCenter().toArray(), zoom: map.getZoom(), bearing: map.getBearing(), pitch: map.getPitch() }
+		}
+		focusMode = mode
+		closeLayerPanel()
+		layersToggle.disabled = true
+		focusReset.querySelector( "span" ).textContent = label
+		focusReset.dataset.mode = mode
+		focusReset.classList.remove( "is-hidden" )
+		applyCustomLayerSettings()
+	}
+	const exitFocusMode = ( restoreCamera = true ) => {
+		if( focusMode === "brand" ) {
+			brandFilter.classList.add( "is-hidden" )
+			setBrandLayerVisibility( "none" )
+		}
+		focusMode = null
+		analysisFocusPoiIds = []
+		;[ "fast-food-point-glow", "fast-food-points" ].forEach( layerId => {
+			if( map?.getLayer( layerId ) ) {
+				map.setFilter( layerId, null )
+			}
+		} )
+		layersToggle.disabled = false
+		focusReset.classList.add( "is-hidden" )
+		delete focusReset.dataset.mode
+		applyCustomLayerSettings()
+		if( restoreCamera && focusCamera && map ) {
+			map.easeTo( { ...focusCamera, duration: 700 } )
+		}
+		focusCamera = null
+	}
 	const applyBasemapSettings = () => {
 		if( !map ) {
 			return
@@ -532,6 +614,7 @@ export function createApp() {
 		territoryLegend.classList.toggle( "is-hidden", !layerSettings.serviceAreas || territoryFeatures.length === 0 )
 		districtLegend.classList.toggle( "is-hidden", !layerSettings.opportunityMap || opportunityFeatures.length === 0 || territoryFeatures.length > 0 )
 		osmAttribution.classList.toggle( "is-hidden", !( layerSettings.metro && metroLayerLoaded ) && !( layerSettings.transitStops && transitLayerLoaded ) && !( layerSettings.roadFlow && roadLayerLoaded ) )
+		applyFocusMode()
 	}
 	const syncLayerControls = () => get( ".layers-panel" ).querySelectorAll( "[data-layer-setting]" ).forEach( button => {
 		const enabled = Boolean( layerSettings[ button.dataset.layerSetting ] )
@@ -585,6 +668,7 @@ export function createApp() {
 		map?.getSource( "fast-food-poi" )?.setData( featureCollection( poiFeatures ) )
 	}
 	const selectDistrict = district => {
+		enterFocusMode( "district", "Barcha qatlamlarni qaytarish" )
 		selectedDistrictId = district.properties.id
 		selectedPoint = null
 		get( "#district-select" ).value = selectedDistrictId
@@ -1008,7 +1092,7 @@ export function createApp() {
 			const districtMetricSelectors = [ "#district-population", "#district-pois", "#district-per-capita", "#district-comparison" ]
 			districtMetricSelectors.forEach( selector => get( selector ).textContent = "—" )
 		}
-		return { pressureScore, pressureLevel, competitorCount: withinRadius.length, brandCount: brandCounts.size, nearest, territory, metro, transit, demand, road, district }
+		return { pressureScore, pressureLevel, competitorCount: withinRadius.length, brandCount: brandCounts.size, nearest, territory, metro, transit, demand, road, district, poiIds: [ ...withinRadius.map( item => item.feature.properties.id ), ...( selectedPoiId ? [ selectedPoiId ] : [] ) ] }
 	}
 	const clearActivePoi = () => {
 		if( activePoiId && map?.getSource( "fast-food-poi" ) ) {
@@ -1166,7 +1250,7 @@ export function createApp() {
 			.setLngLat( coordinates ).setDOMContent( content ).addTo( map )
 		button.addEventListener( "click", () => {
 			activePopup.remove()
-			startWorkflow( "analyze" )
+			startWorkflow( "analyze", { preserveFocus: true } )
 			selectLocation( { lng: coordinates[ 0 ], lat: coordinates[ 1 ] } )
 		} )
 	}
@@ -1294,6 +1378,10 @@ export function createApp() {
 
 	const clearBrandMode = () => {
 		brandFilter.classList.add( "is-hidden" )
+		if( focusMode === "brand" ) {
+			exitFocusMode( false )
+			return
+		}
 		if( poiLayerLoaded ) {
 			setBrandLayerVisibility( "none" )
 			applyCustomLayerSettings()
@@ -1308,8 +1396,7 @@ export function createApp() {
 		const filter = [ "==", [ "get", "brandId" ], brandId ]
 		const brandLayerIds = [ "fast-food-brand-glow", "fast-food-brand-points" ]
 		brandLayerIds.forEach( layerId => map.setFilter( layerId, filter ) )
-		setPoiLayerVisibility( "none" )
-		setBrandLayerVisibility( "visible" )
+		enterFocusMode( "brand", "Barcha qatlamlarni qaytarish" )
 		get( "#brand-filter-name" ).textContent = brandName
 		get( "#brand-filter-count" ).textContent = `${ brandFeatures.length } ta filial`
 		brandFilter.classList.remove( "is-hidden" )
@@ -1393,6 +1480,9 @@ export function createApp() {
 	const selectSearchResult = feature => {
 		const coordinates = feature.geometry.coordinates
 		closeSearch()
+		if( focusMode ) {
+			exitFocusMode( false )
+		}
 		clearBrandMode()
 		searchInput.value = cleanName( feature.properties.name )
 		hidePanels()
@@ -1941,6 +2031,7 @@ export function createApp() {
 	get( ".close-report" ).addEventListener( "click", showMap )
 	get( ".close-page" ).addEventListener( "click", showMap )
 	get( ".close-comparison" ).addEventListener( "click", showMap )
+	focusReset.addEventListener( "click", () => exitFocusMode( true ) )
 	get( "#save-analysis-report" ).addEventListener( "click", event => savePendingReport( event.currentTarget ) )
 	get( "#save-comparison-report" ).addEventListener( "click", event => savePendingReport( event.currentTarget ) )
 	root.querySelectorAll( "[data-compare-slot]" ).forEach( button => button.addEventListener( "click", () => {
@@ -2026,8 +2117,12 @@ export function createApp() {
 		report.classList.remove( "is-hidden" )
 		report.classList.toggle( "is-find-report", activeWorkflow === "find" )
 		if( activeWorkflow === "find" ) {
+			if( focusMode === "district" ) {
+				exitFocusMode( false )
+			}
 			territoryLegend.classList.add( "is-hidden" )
 			const result = findDistrictLocations()
+			enterFocusMode( "find-results", "Barcha qatlamlarni qaytarish" )
 			const district = districtFeatures.find( feature => feature.properties.id === selectedDistrictId )
 			get( "#report-title" ).textContent = "Tavsiya etilgan lokatsiyalar"
 			get( "#report-location" ).textContent = `${ district.properties.name } · ${ radius / 1000 } km lokal radius`
@@ -2044,6 +2139,8 @@ export function createApp() {
 			saveLayerSettings()
 			syncLayerControls()
 			const result = analyzeCompetition()
+			analysisFocusPoiIds = result.poiIds
+			enterFocusMode( "analysis", "Barcha qatlamlarni qaytarish" )
 			syncLayerControls()
 			applyCustomLayerSettings()
 			territoryLegend.classList.remove( "is-hidden" )
