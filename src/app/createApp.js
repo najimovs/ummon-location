@@ -2,7 +2,6 @@ import {
 	ArrowLeft,
 	ArrowLeftRight,
 	ArrowRight,
-	ChevronDown,
 	FileText,
 	HelpCircle,
 	Layers3,
@@ -18,7 +17,8 @@ import {
 	X,
 	createIcons,
 } from "lucide"
-import { area, bbox, booleanPointInPolygon, circle, featureCollection, intersect, point, pointGrid, voronoi } from "@turf/turf"
+import { cellToBoundary, cellToLatLng, polygonToCells } from "h3-js"
+import { area, bbox, booleanPointInPolygon, circle, featureCollection, intersect, point, voronoi } from "@turf/turf"
 
 const workflows = {
 	analyze: {
@@ -47,6 +47,7 @@ const defaultLayerSettings = {
 	fastFoodHeatmap: true,
 	serviceAreas: true,
 	districts: true,
+	opportunityMap: true,
 	placeLabels: true,
 	roadLabels: true,
 	poiLabels: false,
@@ -87,17 +88,17 @@ export function createApp() {
 	root.insertAdjacentHTML( "beforeend", `
 		<header class="topbar">
 			<a class="brand" href="#" aria-label="Ummon Location"><span class="brand-mark"><img src="/logo.png" alt=""></span><span><strong>Ummon</strong><small>Location Intelligence</small></span></a>
-			<button class="city-selector" type="button"><i class="status-dot"></i>Toshkent <i data-lucide="chevron-down"></i></button>
 			<div class="map-search"><span><i data-lucide="search"></i></span><input type="search" placeholder="Fast food yoki manzilni qidiring" aria-label="Fast food qidirish" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-results"><kbd>⌘ K</kbd><div class="search-results" id="search-results" role="listbox" hidden></div></div>
 			<div class="layer-control">
 				<button class="layers-toggle" type="button" aria-expanded="false" aria-controls="layers-panel"><i data-lucide="layers-3"></i><span>Qatlamlar</span></button>
 				<section class="layers-panel is-hidden" id="layers-panel" aria-label="Xarita qatlamlari">
 					<header><div><span>XARITA SOZLAMALARI</span><strong>Qatlamlar</strong></div><button class="close-layers" type="button" aria-label="Qatlamlarni yopish"><i data-lucide="x"></i></button></header>
 					<div class="layer-group"><b>Ummon data</b>
-						<button class="layer-switch" type="button" role="switch" data-layer-setting="fastFoodPoints"><span><i class="layer-dot is-poi"></i><em>Fast-food nuqtalari<small>POI va brand lokatsiyalari</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="fastFoodPoints"><span><i class="layer-dot is-poi"></i><em>Fast-food nuqtalari<small>Restoran va tarmoq manzillari</small></em></span><i></i></button>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="fastFoodHeatmap"><span><i class="layer-dot is-heatmap"></i><em>Zichlik heatmap’i<small>Fast-food klasterlari</small></em></span><i></i></button>
-						<button class="layer-switch" type="button" role="switch" data-layer-setting="serviceAreas"><span><i class="layer-dot is-area"></i><em>Xizmat hududlari<small>Tahlildan keyingi Voronoi</small></em></span><i></i></button>
-						<button class="layer-switch" type="button" role="switch" data-layer-setting="districts"><span><i class="layer-dot is-district"></i><em>Tumanlar<small>Chegara va opportunity score</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="serviceAreas"><span><i class="layer-dot is-area"></i><em>Xizmat hududlari<small>Joy tahlilidan keyin ochiladi</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="districts"><span><i class="layer-dot is-district"></i><em>Tumanlar<small>Chegara va tuman nomlari</small></em></span><i></i></button>
+						<button class="layer-switch" type="button" role="switch" data-layer-setting="opportunityMap"><span><i class="layer-dot is-h3"></i><em>Imkoniyat xaritasi<small>“Joy topish” natijasidan keyin ochiladi</small></em></span><i></i></button>
 					</div>
 					<div class="layer-group"><b>Asosiy xarita</b>
 						<button class="layer-switch" type="button" role="switch" data-layer-setting="placeLabels"><span><em>Joy nomlari<small>Tuman va mahallalar</small></em></span><i></i></button>
@@ -116,7 +117,6 @@ export function createApp() {
 			<span class="nav-label">Workspace</span>
 			<nav>${ navigation }</nav>
 			<div class="sidebar-bottom">
-				<span class="system-status"><i></i><b>Data holati</b><small>OSM · Mapbox</small></span>
 				<button class="nav-item" type="button" data-view="settings"><span><i data-lucide="settings"></i></span><b>Sozlamalar</b></button>
 			</div>
 		</aside>
@@ -136,9 +136,9 @@ export function createApp() {
 				<div class="report-head"><div><span class="eyebrow">REAL GEO ANALYTICS</span><h2 id="report-title">Raqobat tahlili</h2><small id="report-location">Tanlangan lokatsiya</small></div><button class="close-report" type="button"><i data-lucide="x"></i></button></div>
 				<div class="district-context analysis-only"><span>TUMAN KONTEKSTI</span><strong id="analysis-district">Aniqlanmoqda…</strong><div><p><small>Aholi</small><b id="district-population">—</b></p><p><small>Fast-food</small><b id="district-pois">—</b></p><p><small>10 000 aholiga</small><b id="district-per-capita">—</b></p><p><small>Taqqoslash</small><b id="district-comparison">—</b></p></div></div>
 				<div class="score-block analysis-only"><div class="score-ring"><strong id="competition-score">—</strong><small>/100</small></div><div><span>RAQOBAT BOSIMI</span><strong id="competition-level">Hisoblanmoqda</strong><p id="competition-summary">Radius ichidagi fast-food nuqtalari asosida.</p></div></div>
-				<div class="metric-grid analysis-only"><article><span>Raqobatchilar</span><strong id="competitor-count">—</strong></article><article><span>Tarmoq brandlari</span><strong id="brand-count">—</strong></article><article><span>Eng yaqin raqib</span><strong id="nearest-distance">—</strong></article><article><span>Dominant brand</span><strong id="dominant-brand">—</strong></article></div>
-				<div class="find-results"><div class="district-summary"><span>TUMAN OPPORTUNITY</span><strong id="find-district-name">—</strong><p id="find-district-summary">Hisoblanmoqda…</p><div><b id="find-population">—</b><small>Aholi</small><b id="find-density">—</b><small>odam/km²</small><b id="find-pois">—</b><small>Fast-food</small></div></div><div class="candidate-list" id="candidate-list"></div><p class="model-note">Rating tuman aholisi, mavjud fast-food zichligi, yaqin raqiblar soni va eng yaqin raqibgacha masofa asosida hisoblanadi.</p></div>
-				<div class="report-section territory-section analysis-only"><div><h3>Taxminiy xizmat hududi</h3><span>Voronoi modeli</span></div><div class="territory-card"><div class="territory-primary"><span>Yangi lokatsiya maydoni</span><strong id="candidate-area">—</strong><small id="territory-share">Umumiy maydonning —</small></div><div class="territory-stats"><p><span>Tanlangan radius</span><b id="analysis-area">—</b></p><p><span>Raqiblar o‘rtachasi</span><b id="average-area">—</b></p><p><span>Comparison</span><b id="area-comparison">—</b></p></div><div class="territory-bars"><div><span>Yangi nuqta</span><i><em id="candidate-area-bar"></em></i><b id="candidate-area-label">—</b></div><div><span>Raqib o‘rtachasi</span><i><em id="average-area-bar"></em></i><b id="average-area-label">—</b></div></div></div><div class="territory-note" id="territory-insight">Xizmat hududi raqobatchilargacha bo‘lgan to‘g‘ri chiziq masofasi asosida hisoblanadi.</div><div class="territory-explainer"><strong>Bu raqam qanday chiqdi?</strong><ol><li><span>1</span><p><b>Eng yaqin nuqta</b>Hududdagi har bir joy eng yaqin fast-food’ga biriktiriladi.</p></li><li><span>2</span><p><b>Radius bilan kesish</b>Faqat siz tanlagan doira ichidagi maydon qoldiriladi.</p></li><li><span>3</span><p><b>Raqib bilan solishtirish</b>Yangi hudud yaqin raqiblarning o‘rtacha maydoni bilan taqqoslanadi.</p></li></ol></div></div>
+				<div class="metric-grid analysis-only"><article><span>Raqobatchilar</span><strong id="competitor-count">—</strong></article><article><span>Tarmoq brendlari</span><strong id="brand-count">—</strong></article><article><span>Eng yaqin raqib</span><strong id="nearest-distance">—</strong></article><article><span>Yetakchi brend</span><strong id="dominant-brand">—</strong></article></div>
+				<div class="find-results"><div class="district-summary"><span>MIJOZ TANLOVI SIMULYATSIYASI</span><strong id="find-district-name">—</strong><p id="find-district-summary">Hisoblanmoqda…</p><div><b id="find-population">—</b><small>Aholi</small><b id="find-density">—</b><small>odam/km²</small><b id="find-pois">—</b><small>Fast-food</small></div></div><div class="simulation-explainer"><strong>Simulyatsiyada nima sodir bo‘ladi?</strong><div><span>1</span><p><b>Hudud bo‘linadi</b>Tuman kichik olti burchakli qismlarga ajratiladi.</p></div><div><span>2</span><p><b>Har bir joy sinab ko‘riladi</b>Shu yerda yangi fast-food ochilsa, odamlar uni tanlash ehtimoli hisoblanadi.</p></div><div><span>3</span><p><b>Eng kuchli joylar saralanadi</b>Aholi, masofa va barcha yaqin raqiblar birgalikda solishtiriladi.</p></div></div><div class="huff-view"><div><button class="is-active" type="button" data-huff-view="opportunity">Eng yaxshi joylar</button><button type="button" data-huff-view="capture" disabled>Tanlangan joy ta’siri</button></div><p id="huff-view-note">Xaritadagi yorqin hududlar yangi fast-food uchun kuchliroq imkoniyatni bildiradi.</p></div><div class="candidate-impact is-hidden" id="candidate-impact"><span>TANLANGAN JOY NATIJASI</span><strong id="impact-score">—</strong><div><p><small>Bozor ulushi</small><b id="impact-share">—</b></p><p><small>Taxminiy mijozlar</small><b id="impact-population">—</b></p><p><small>Eng yaqin raqib</small><b id="impact-nearest">—</b></p></div><p id="impact-brands">Joy tanlanganda uning raqiblarga taxminiy ta’siri ko‘rsatiladi.</p></div><div class="candidate-list" id="candidate-list"></div><p class="model-note"><b>Muhim:</b> bu taxminiy model. Hozir aholi tuman ichidagi kichik hududlarga teng taqsimlanadi. Natija yakuniy biznes kafolati emas, lokatsiyalarni solishtirish uchun qaror signali hisoblanadi.</p></div>
+				<div class="report-section territory-section analysis-only"><div><h3>Taxminiy xizmat hududi</h3><span>Eng yaqin nuqta modeli</span></div><div class="territory-card"><div class="territory-primary"><span>Yangi lokatsiya maydoni</span><strong id="candidate-area">—</strong><small id="territory-share">Umumiy maydonning —</small></div><div class="territory-stats"><p><span>Tanlangan radius</span><b id="analysis-area">—</b></p><p><span>Raqiblar o‘rtachasi</span><b id="average-area">—</b></p><p><span>O‘rtachadan farqi</span><b id="area-comparison">—</b></p></div><div class="territory-bars"><div><span>Yangi nuqta</span><i><em id="candidate-area-bar"></em></i><b id="candidate-area-label">—</b></div><div><span>Raqib o‘rtachasi</span><i><em id="average-area-bar"></em></i><b id="average-area-label">—</b></div></div></div><div class="territory-note" id="territory-insight">Xizmat hududi raqobatchilargacha bo‘lgan to‘g‘ri chiziq masofasi asosida hisoblanadi.</div><div class="territory-explainer"><strong>Bu raqam qanday chiqdi?</strong><ol><li><span>1</span><p><b>Eng yaqin nuqta</b>Hududdagi har bir joy eng yaqin fast-food’ga biriktiriladi.</p></li><li><span>2</span><p><b>Radius bilan kesish</b>Faqat siz tanlagan doira ichidagi maydon qoldiriladi.</p></li><li><span>3</span><p><b>Raqib bilan solishtirish</b>Yangi hudud yaqin raqiblarning o‘rtacha maydoni bilan taqqoslanadi.</p></li></ol></div></div>
 				<div class="report-section analysis-only"><div><h3>Masofa bo‘yicha zichlik</h3><span>Fast food POI</span></div><div class="signal-list"><p><i></i>500 metr ichida <b id="band-500">—</b></p><p><i></i>1 kilometr ichida <b id="band-1000">—</b></p><p><i></i>2 kilometr ichida <b id="band-2000">—</b></p></div></div>
 				<div class="report-section analysis-only"><div><h3>Eng yaqin raqobatchi</h3></div><div class="empty-insight" id="nearest-competitor">Hisoblanmoqda…</div></div>
 				<div class="report-section analysis-only"><div><h3>Tahlil izohi</h3></div><div class="empty-insight" id="competition-insight">Hozircha tahlil faqat fast-food raqobati signaliga asoslanadi.</div></div>
@@ -149,15 +149,15 @@ export function createApp() {
 			</section>
 
 			<div class="map-hint is-hidden"><span><i data-lucide="locate-fixed"></i></span> Xaritadan nuqtani tanlang</div>
-			<div class="brand-filter is-hidden"><span><small>BRAND MODE</small><strong id="brand-filter-name">EVOS</strong><b id="brand-filter-count">0 ta filial</b></span><button type="button" aria-label="Brand filtrini yopish"><i data-lucide="x"></i></button></div>
-			<div class="territory-legend is-hidden"><strong>Xizmat hududi xaritasi</strong><p><i class="is-candidate"></i><span><b>Yangi lokatsiya</b>Sizning nuqtangiz eng yaqin bo‘lgan hudud</span></p><p><i class="is-competitor"></i><span><b>Raqib hududlari</b>Boshqa fast-food’lar yaqinroq bo‘lgan joylar</span></p><p><i class="is-generator"></i><span><b>Cell markazi</b>Hududni yaratgan haqiqiy fast-food POI</span></p><p><i class="is-radius"></i><span><b>Tahlil chegarasi</b>Siz tanlagan radius doirasi</span></p></div>
-			<div class="district-legend"><strong>Tuman opportunity</strong><i></i><span><small>Past</small><small>Yuqori</small></span></div>
+			<div class="brand-filter is-hidden"><span><small>TARMOQ FILTRI</small><strong id="brand-filter-name">EVOS</strong><b id="brand-filter-count">0 ta filial</b></span><button type="button" aria-label="Tarmoq filtrini yopish"><i data-lucide="x"></i></button></div>
+			<div class="territory-legend is-hidden"><strong>Xizmat hududi xaritasi</strong><p><i class="is-candidate"></i><span><b>Yangi lokatsiya</b>Sizning nuqtangiz eng yaqin bo‘lgan hudud</span></p><p><i class="is-competitor"></i><span><b>Raqib hududlari</b>Boshqa fast-food’lar yaqinroq bo‘lgan joylar</span></p><p><i class="is-generator"></i><span><b>Hudud markazi</b>Hududni yaratgan haqiqiy fast-food nuqtasi</span></p><p><i class="is-radius"></i><span><b>Tahlil chegarasi</b>Siz tanlagan radius doirasi</span></p></div>
+			<div class="district-legend is-hidden"><strong id="map-score-legend">Joy imkoniyati</strong><p id="map-score-description">Har bir kichik hududda yangi fast-food ochish alohida hisoblangan.</p><i></i><span><small id="map-score-low">Past</small><small id="map-score-high">Yuqori</small></span></div>
 			<div class="map-tools"><button type="button" data-map-action="in" aria-label="Xaritani kattalashtirish"><i data-lucide="plus"></i></button><button type="button" data-map-action="out" aria-label="Xaritani kichraytirish"><i data-lucide="minus"></i></button></div>
 		</main>
 	` )
 
 	createIcons( {
-		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, FileText, HelpCircle, Layers3, LocateFixed, MapPin, Minus, Plus, Search, Settings, Store, Target, UserRound, X },
+		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, FileText, HelpCircle, Layers3, LocateFixed, MapPin, Minus, Plus, Search, Settings, Store, Target, UserRound, X },
 		attrs: { "stroke-width": 1.8 },
 	} )
 
@@ -178,6 +178,9 @@ export function createApp() {
 	let districtFeatures = []
 	let selectedDistrictId
 	let candidateFeatures = []
+	let opportunityFeatures = []
+	let activeCandidateId
+	let huffView = "opportunity"
 	const layerSettings = readLayerSettings()
 
 	const get = selector => root.querySelector( selector )
@@ -224,11 +227,16 @@ export function createApp() {
 		}
 		territoryFeatures = []
 		candidateFeatures = []
-		districtLegend.classList.toggle( "is-hidden", !layerSettings.districts )
+		opportunityFeatures = []
+		activeCandidateId = null
+		huffView = "opportunity"
+		districtLegend.classList.add( "is-hidden" )
 		map?.getSource( "location-candidates" )?.setData( featureCollection( [] ) )
+		map?.getSource( "h3-opportunity" )?.setData( featureCollection( [] ) )
 		if( map?.getLayer( "district-selected" ) ) {
 			map.setFilter( "district-selected", [ "==", [ "get", "id" ], "" ] )
 		}
+		syncLayerControls()
 	}
 
 	const selectLocation = ( point, poiId = null ) => {
@@ -353,15 +361,22 @@ export function createApp() {
 		setLayerVisibility( [ "fast-food-heatmap" ], layerSettings.fastFoodHeatmap )
 		setLayerVisibility( [ "fast-food-point-glow", "fast-food-points" ], layerSettings.fastFoodPoints )
 		setLayerVisibility( [ "voronoi-analysis-fill", "voronoi-analysis-glow", "voronoi-analysis-line", "voronoi-site-glow", "voronoi-site-points" ], layerSettings.serviceAreas )
-		setLayerVisibility( [ "district-fill", "district-line", "district-selected" ], layerSettings.districts )
+		setLayerVisibility( [ "district-fill", "district-line-glow", "district-line", "district-selected" ], layerSettings.districts )
+		setLayerVisibility( [ "district-labels" ], layerSettings.districts && opportunityFeatures.length === 0 )
 		setLayerVisibility( [ "location-candidate-glow", "location-candidates" ], candidateFeatures.length > 0 )
+		setLayerVisibility( [ "h3-opportunity-fill", "h3-opportunity-line" ], layerSettings.opportunityMap && opportunityFeatures.length > 0 )
 		territoryLegend.classList.toggle( "is-hidden", !layerSettings.serviceAreas || territoryFeatures.length === 0 )
-		districtLegend.classList.toggle( "is-hidden", !layerSettings.districts || territoryFeatures.length > 0 )
+		districtLegend.classList.toggle( "is-hidden", !layerSettings.opportunityMap || opportunityFeatures.length === 0 || territoryFeatures.length > 0 )
 	}
 	const syncLayerControls = () => get( ".layers-panel" ).querySelectorAll( "[data-layer-setting]" ).forEach( button => {
 		const enabled = Boolean( layerSettings[ button.dataset.layerSetting ] )
-		button.classList.toggle( "is-active", enabled )
-		button.setAttribute( "aria-checked", String( enabled ) )
+		const unavailable = button.dataset.layerSetting === "serviceAreas"
+			? territoryFeatures.length === 0
+			: button.dataset.layerSetting === "opportunityMap" && opportunityFeatures.length === 0
+		button.classList.toggle( "is-active", enabled && !unavailable )
+		button.classList.toggle( "is-unavailable", unavailable )
+		button.disabled = unavailable
+		button.setAttribute( "aria-checked", String( enabled && !unavailable ) )
 	} )
 	const saveLayerSettings = () => localStorage.setItem( "ummon-layer-settings", JSON.stringify( layerSettings ) )
 	const closeLayerPanel = () => {
@@ -399,14 +414,8 @@ export function createApp() {
 			const populationDensity = population / areaKm2
 			const poiDensity = poiCount / areaKm2
 			const perCapita = poiCount / population * 10000
-			const demandPerPoi = population / Math.max( 1, poiCount )
-			const opportunityRaw = populationDensity * 0.45 + demandPerPoi * 0.55
-			Object.assign( district.properties, { poiCount, areaKm2, populationDensity, poiDensity, perCapita, opportunityRaw } )
+			Object.assign( district.properties, { poiCount, areaKm2, populationDensity, poiDensity, perCapita } )
 		} )
-		const rawScores = districtFeatures.map( district => district.properties.opportunityRaw )
-		const minimumScore = Math.min( ...rawScores )
-		const scoreRange = Math.max( 1, Math.max( ...rawScores ) - minimumScore )
-		districtFeatures.forEach( district => district.properties.opportunityScore = Math.round( 35 + ( district.properties.opportunityRaw - minimumScore ) / scoreRange * 55 ) )
 		map?.getSource( "districts" )?.setData( featureCollection( districtFeatures ) )
 		map?.getSource( "fast-food-poi" )?.setData( featureCollection( poiFeatures ) )
 	}
@@ -532,7 +541,7 @@ export function createApp() {
 		const insight = pressureScore >= 70
 			? "Bu hududda fast-food klasteri shakllangan. Talab signali bo‘lishi mumkin, ammo yangi biznes aniq format va kuchli differensiatsiya bilan kirishi kerak."
 			: pressureScore >= 35
-				? "Raqobat muvozanatli. Yaqin raqiblarning formati va dominant brand taklifidan farqlanish imkoniyati bor."
+				? "Raqobat muvozanatli. Yaqin raqiblarning formati va yetakchi brend taklifidan farqlanish imkoniyati bor."
 				: "Bevosita raqobat past. Bu imkoniyat bo‘lishi mumkin, lekin past zichlik talab yetarli degani emas — keyingi signallar bilan tekshirish kerak."
 
 		get( "#competition-score" ).textContent = pressureScore
@@ -634,7 +643,7 @@ export function createApp() {
 		const properties = district.properties
 		const content = document.createElement( "div" )
 		content.className = "district-popup__content"
-		content.innerHTML = `<span>TUMAN TAHLILI</span><strong>${ properties.name }</strong><p>${ formatNumber( properties.population ) } aholi · ${ Number( properties.areaKm2 || 0 ).toFixed( 1 ) } km²</p><div><span><small>Fast-food</small><b>${ properties.poiCount ?? "—" }</b></span><span><small>10 000 aholiga</small><b>${ Number( properties.perCapita || 0 ).toFixed( 2 ) }</b></span><span><small>Opportunity</small><b>${ properties.opportunityScore ?? "—" }/100</b></span></div>`
+		content.innerHTML = `<span>TUMAN MA’LUMOTLARI</span><strong>${ properties.name }</strong><p>${ formatNumber( properties.population ) } aholi · ${ Number( properties.areaKm2 || 0 ).toFixed( 1 ) } km²</p><div><span><small>Fast-food</small><b>${ properties.poiCount ?? "—" }</b></span><span><small>10 000 aholiga</small><b>${ Number( properties.perCapita || 0 ).toFixed( 2 ) }</b></span><span><small>Aholi zichligi</small><b>${ formatNumber( properties.populationDensity ) }/km²</b></span></div><small class="district-popup__note">Bu tuman bo‘yicha umumiy statistika. Aniq kuchli joylarni ko‘rish uchun “Shu tumanda joy topish”ni bosing.</small>`
 		const button = document.createElement( "button" )
 		button.type = "button"
 		button.textContent = "Shu tumanda joy topish"
@@ -647,12 +656,84 @@ export function createApp() {
 			selectDistrict( district )
 		} )
 	}
+	const showH3Popup = ( feature, lngLat ) => {
+		activePopup?.remove()
+		const properties = feature.properties
+		const content = document.createElement( "div" )
+		content.className = "h3-popup__content"
+		content.innerHTML = huffView === "capture"
+			? `<span>TANLANGAN JOY TA’SIRI</span><strong>${ properties.captureScore }%</strong><p>Ushbu kichik hududdagi taxminiy ${ formatNumber( properties.estimatedPopulation ) } aholining yangi fast-food’ni tanlash ehtimoli.</p><small>Foiz qancha yuqori bo‘lsa, yangi nuqta shu yerdan shuncha ko‘p mijoz jalb qilishi mumkin.</small>`
+			: `<span>JOY IMKONIYATI</span><strong>${ properties.opportunityScore }/100</strong><p>Shu yerda fast-food ochish ssenariysi tuman aholisi, masofa va yaqin raqiblar bilan hisoblandi.</p><small>Yuqori ball — nisbatan ko‘proq talab va kamroq raqobat signali.</small>`
+		activePopup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: true, offset: 10, maxWidth: "310px", className: "h3-popup" } )
+			.setLngLat( lngLat ).setDOMContent( content ).addTo( map )
+	}
+	const getCandidateUtility = ( origin, coordinates ) => {
+		const distance = distanceMeters( origin, coordinates )
+		return distance > 5000 ? 0 : 1 / Math.max( 200, distance ) ** 2
+	}
+	const setHuffView = mode => {
+		if( mode === "capture" && !activeCandidateId ) {
+			return
+		}
+		huffView = mode
+		opportunityFeatures.forEach( feature => feature.properties.displayScore = mode === "capture" ? feature.properties.captureScore : feature.properties.opportunityScore )
+		map.getSource( "h3-opportunity" )?.setData( featureCollection( opportunityFeatures ) )
+		root.querySelectorAll( "[data-huff-view]" ).forEach( button => button.classList.toggle( "is-active", button.dataset.huffView === mode ) )
+		get( "#huff-view-note" ).textContent = mode === "capture"
+			? "Yorqin hududlarda odamlarning tanlangan yangi fast-food’ga borish ehtimoli yuqoriroq."
+			: "Xaritadagi yorqin hududlar yangi fast-food uchun kuchliroq imkoniyatni bildiradi."
+		get( "#map-score-legend" ).textContent = mode === "capture" ? "Yangi joyni tanlash ehtimoli" : "Joy imkoniyati"
+		get( "#map-score-description" ).textContent = mode === "capture" ? "Yorqin hududlarda yangi joy ko‘proq mijoz jalb qilishi mumkin." : "Har bir kichik hududda yangi fast-food ochish alohida hisoblangan."
+		get( "#map-score-low" ).textContent = mode === "capture" ? "Past %" : "Band"
+		get( "#map-score-high" ).textContent = mode === "capture" ? "Yuqori %" : "Imkoniyat"
+	}
+	const selectCandidateScenario = ( feature, focus = true ) => {
+		activeCandidateId = feature.properties.id
+		const coordinates = feature.geometry.coordinates
+		const brandLosses = new Map()
+		opportunityFeatures.forEach( origin => {
+			const originCenter = { lng: origin.properties.lng, lat: origin.properties.lat }
+			const candidateUtility = getCandidateUtility( originCenter, coordinates )
+			const existingUtility = origin.properties.existingUtility
+			const totalUtility = existingUtility + candidateUtility
+			const captureShare = totalUtility ? candidateUtility / totalUtility : 0
+			origin.properties.captureScore = Math.round( captureShare * 100 )
+			origin.properties.displayScore = origin.properties.captureScore
+			origin.properties.captureShare = captureShare
+			const capturedPopulation = origin.properties.estimatedPopulation * captureShare
+			const nearbyPois = poiFeatures.filter( poi => distanceMeters( originCenter, poi.geometry.coordinates ) <= 5000 )
+			nearbyPois.forEach( poi => {
+				const distance = Math.max( 200, distanceMeters( originCenter, poi.geometry.coordinates ) )
+				const utility = Number( poi.properties.huffAttractiveness || 1 ) / distance ** 2
+				const loss = existingUtility ? capturedPopulation * utility / existingUtility : 0
+				const brand = poi.properties.brandName || cleanName( poi.properties.name )
+				brandLosses.set( brand, ( brandLosses.get( brand ) || 0 ) + loss )
+			} )
+		} )
+		map.getSource( "h3-opportunity" ).setData( featureCollection( opportunityFeatures ) )
+		get( "[data-huff-view='capture']" ).disabled = false
+		setHuffView( "capture" )
+		get( "#candidate-impact" ).classList.remove( "is-hidden" )
+		get( "#impact-score" ).textContent = `#${ feature.properties.rank } · ${ feature.properties.score }/100`
+		get( "#impact-share" ).textContent = `${ feature.properties.marketShare.toFixed( 1 ) }%`
+		get( "#impact-population" ).textContent = `~${ formatNumber( feature.properties.servedPopulation ) }`
+		get( "#impact-nearest" ).textContent = formatDistance( feature.properties.nearest )
+		const affectedBrands = [ ...brandLosses.entries() ].sort( ( first, second ) => second[ 1 ] - first[ 1 ] ).slice( 0, 3 )
+		get( "#impact-brands" ).textContent = affectedBrands.length
+			? `Yangi joy ochilsa, eng ko‘p mijoz yo‘qotishi mumkin bo‘lgan brendlar: ${ affectedBrands.map( ( [ brand, population ] ) => `${ brand } (~${ formatNumber( population ) } kishi)` ).join( ", " ) }.`
+			: "Ta’sirni hisoblash uchun yaqin raqib topilmadi."
+		get( "#candidate-list" ).querySelectorAll( "button" ).forEach( button => button.classList.toggle( "is-active", button.dataset.candidateId === activeCandidateId ) )
+		if( focus ) {
+			map.easeTo( { center: coordinates, zoom: 14.5, duration: 800 } )
+		}
+	}
 	const showCandidatePopup = feature => {
 		activePopup?.remove()
+		selectCandidateScenario( feature )
 		const coordinates = feature.geometry.coordinates
 		const content = document.createElement( "div" )
 		content.className = "candidate-popup__content"
-		content.innerHTML = `<span>#${ feature.properties.rank } TAVSIYA</span><strong>${ feature.properties.score }/100</strong><p>${ feature.properties.nearby } ta raqib · eng yaqini ${ formatDistance( feature.properties.nearest ) }</p>`
+		content.innerHTML = `<span>#${ feature.properties.rank } · TAVSIYA ETILGAN JOY</span><strong>${ feature.properties.score }/100</strong><p>Taxminiy bozor ulushi ${ feature.properties.marketShare.toFixed( 1 ) }% · ~${ formatNumber( feature.properties.servedPopulation ) } potensial mijoz</p>`
 		const button = document.createElement( "button" )
 		button.type = "button"
 		button.textContent = "Bu nuqtani chuqur tahlil qilish"
@@ -670,21 +751,59 @@ export function createApp() {
 		if( !district ) {
 			return
 		}
-		const grid = pointGrid( bbox( district ), 0.45, { units: "kilometers", mask: district } )
-		const scored = grid.features.map( feature => {
-			const coordinates = feature.geometry.coordinates
+		const brandCounts = new Map()
+		poiFeatures.forEach( poi => {
+			const brand = poi.properties.brandId || normalizeSearch( poi.properties.name )
+			brandCounts.set( brand, ( brandCounts.get( brand ) || 0 ) + 1 )
+		} )
+		poiFeatures.forEach( poi => {
+			const brand = poi.properties.brandId || normalizeSearch( poi.properties.name )
+			poi.properties.huffAttractiveness = 0.72 + Number( poi.properties.confidence || 0.7 ) * 0.28 + Math.min( 20, brandCounts.get( brand ) || 1 ) * 0.02
+		} )
+		const cells = polygonToCells( district.geometry.coordinates, 9, true )
+		const estimatedPopulation = Number( district.properties.population ) / Math.max( 1, cells.length )
+		opportunityFeatures = cells.map( cell => {
+			const [ lat, lng ] = cellToLatLng( cell )
+			const originCenter = { lng, lat }
+			const existingUtility = poiFeatures.reduce( ( sum, poi ) => {
+				const distance = Math.max( 200, distanceMeters( originCenter, poi.geometry.coordinates ) )
+				if( distance > 5000 ) {
+					return sum
+				}
+				return sum + Number( poi.properties.huffAttractiveness || 1 ) / distance ** 2
+			}, 0 )
+			return {
+				type: "Feature",
+				geometry: { type: "Polygon", coordinates: [ cellToBoundary( cell, true ) ] },
+				properties: { id: cell, lat, lng, estimatedPopulation, existingUtility, opportunityScore: 0, captureScore: 0, displayScore: 0 },
+			}
+		} )
+		const scored = opportunityFeatures.map( origin => {
+			const coordinates = [ origin.properties.lng, origin.properties.lat ]
+			let servedPopulation = 0
+			opportunityFeatures.forEach( demandCell => {
+				const demandCenter = { lng: demandCell.properties.lng, lat: demandCell.properties.lat }
+				const candidateUtility = getCandidateUtility( demandCenter, coordinates )
+				const totalUtility = demandCell.properties.existingUtility + candidateUtility
+				servedPopulation += totalUtility ? demandCell.properties.estimatedPopulation * candidateUtility / totalUtility : 0
+			} )
 			const center = { lng: coordinates[ 0 ], lat: coordinates[ 1 ] }
 			const distances = poiFeatures.map( poi => distanceMeters( center, poi.geometry.coordinates ) ).sort( ( first, second ) => first - second )
-			const nearby = distances.filter( distance => distance <= radius ).length
-			const nearest = distances[ 0 ] ?? 3000
-			const gapSignal = Math.min( 1, nearest / 1400 )
-			const scarcitySignal = Math.max( 0, 1 - nearby / 8 )
-			const score = Math.round( Math.min( 98, Number( district.properties.opportunityScore || 50 ) * 0.42 + gapSignal * 33 + scarcitySignal * 25 ) )
-			feature.properties = { id: `candidate-${ coordinates[ 0 ].toFixed( 5 )}-${ coordinates[ 1 ].toFixed( 5 ) }`, score, nearby, nearest, district: district.properties.name }
-			return feature
-		} ).sort( ( first, second ) => second.properties.score - first.properties.score )
+			return { origin, coordinates, servedPopulation, marketShare: servedPopulation / Number( district.properties.population ) * 100, nearby: distances.filter( distance => distance <= radius ).length, nearest: distances[ 0 ] ?? 5000 }
+		} )
+		const servedValues = scored.map( item => item.servedPopulation )
+		const minimumServed = Math.min( ...servedValues )
+		const servedRange = Math.max( 1, Math.max( ...servedValues ) - minimumServed )
+		scored.forEach( item => {
+			const normalized = ( item.servedPopulation - minimumServed ) / servedRange
+			item.score = Math.round( 35 + normalized * 63 )
+			item.origin.properties.opportunityScore = item.score
+			item.origin.properties.displayScore = item.score
+		} )
+		scored.sort( ( first, second ) => second.score - first.score )
 		candidateFeatures = []
-		for( const feature of scored ) {
+		for( const item of scored ) {
+			const feature = point( item.coordinates, { id: `candidate-${ item.origin.properties.id }`, score: item.score, nearby: item.nearby, nearest: item.nearest, servedPopulation: item.servedPopulation, marketShare: item.marketShare, district: district.properties.name } )
 			const farEnough = candidateFeatures.every( candidate => distanceMeters( { lng: feature.geometry.coordinates[ 0 ], lat: feature.geometry.coordinates[ 1 ] }, candidate.geometry.coordinates ) >= 750 )
 			if( farEnough ) {
 				feature.properties.rank = candidateFeatures.length + 1
@@ -694,21 +813,32 @@ export function createApp() {
 				break
 			}
 		}
+		map.getSource( "h3-opportunity" ).setData( featureCollection( opportunityFeatures ) )
 		map.getSource( "location-candidates" ).setData( featureCollection( candidateFeatures ) )
+		layerSettings.opportunityMap = true
+		saveLayerSettings()
+		syncLayerControls()
 		applyCustomLayerSettings()
 		get( "#find-district-name" ).textContent = `${ district.properties.name } tumani`
 		get( "#find-population" ).textContent = formatNumber( district.properties.population )
 		get( "#find-density" ).textContent = formatNumber( district.properties.populationDensity )
 		get( "#find-pois" ).textContent = district.properties.poiCount
-		get( "#find-district-summary" ).textContent = `${ candidateFeatures.length } ta istiqbolli nuqta topildi. Tuman opportunity ko‘rsatkichi ${ district.properties.opportunityScore }/100.`
+		get( "#find-district-summary" ).textContent = `Tuman ${ opportunityFeatures.length } ta kichik hududga bo‘lindi. Har birida fast-food ochish ssenariysi hisoblanib, ${ candidateFeatures.length } ta eng kuchli joy ajratildi.`
+		get( "#map-score-legend" ).textContent = "Joy imkoniyati"
+		get( "#map-score-description" ).textContent = "Har bir kichik hududda yangi fast-food ochish alohida hisoblangan."
+		get( "#map-score-low" ).textContent = "Band"
+		get( "#map-score-high" ).textContent = "Imkoniyat"
+		get( "#candidate-impact" ).classList.add( "is-hidden" )
+		get( "[data-huff-view='capture']" ).disabled = true
+		setHuffView( "opportunity" )
 		const list = get( "#candidate-list" )
 		list.replaceChildren()
 		candidateFeatures.forEach( feature => {
 			const button = document.createElement( "button" )
 			button.type = "button"
-			button.innerHTML = `<span>${ feature.properties.rank }</span><div><strong>${ feature.properties.score } ball</strong><small>${ feature.properties.nearby } ta raqib · ${ formatDistance( feature.properties.nearest ) }</small></div><b>Ko‘rish</b>`
+			button.dataset.candidateId = feature.properties.id
+			button.innerHTML = `<span>${ feature.properties.rank }</span><div><strong>${ feature.properties.score } ball · ${ feature.properties.marketShare.toFixed( 1 ) }% bozor ulushi</strong><small>~${ formatNumber( feature.properties.servedPopulation ) } potensial mijoz · ${ feature.properties.nearby } ta raqib</small></div><b>Ko‘rish</b>`
 			button.addEventListener( "click", () => {
-				map.easeTo( { center: feature.geometry.coordinates, zoom: 15, duration: 800 } )
 				showCandidatePopup( feature )
 			} )
 			list.append( button )
@@ -1051,13 +1181,18 @@ export function createApp() {
 		map = event.detail
 		applyBasemapSettings()
 		map.addSource( "districts", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
+		map.addSource( "h3-opportunity", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "location-candidates", { type: "geojson", data: featureCollection( [] ), promoteId: "id" } )
 		map.addSource( "selection-radius", { type: "geojson", data: { type: "FeatureCollection", features: [] } } )
 		map.addSource( "voronoi-analysis", { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "id" } )
 		map.addSource( "voronoi-sites", { type: "geojson", data: { type: "FeatureCollection", features: [] }, promoteId: "id" } )
-		map.addLayer( { id: "district-fill", type: "fill", source: "districts", paint: { "fill-color": [ "interpolate", [ "linear" ], [ "coalesce", [ "get", "opportunityScore" ], 50 ], 25, "#31455f", 50, "#195f9d", 70, "#168de4", 90, "#47c8ff" ], "fill-opacity": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 0.28, 13, 0.12 ], "fill-emissive-strength": 0.45 } } )
-		map.addLayer( { id: "district-line", type: "line", source: "districts", paint: { "line-color": "#79c9ff", "line-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 1.2, 14, 2.4 ], "line-opacity": 0.72, "line-emissive-strength": 1.3 } } )
+		map.addLayer( { id: "district-fill", type: "fill", source: "districts", paint: { "fill-color": "#168bd4", "fill-opacity": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 0.14, 13, 0.08, 15, 0.04 ], "fill-emissive-strength": 0.35 } } )
+		map.addLayer( { id: "district-line-glow", type: "line", source: "districts", paint: { "line-color": "#2aaeff", "line-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 6, 14, 10 ], "line-blur": 5, "line-opacity": 0.45, "line-emissive-strength": 2.2 } } )
+		map.addLayer( { id: "district-line", type: "line", source: "districts", paint: { "line-color": "#9bdcff", "line-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 1.8, 14, 3 ], "line-opacity": 0.92, "line-emissive-strength": 2 } } )
 		map.addLayer( { id: "district-selected", type: "line", source: "districts", filter: [ "==", [ "get", "id" ], "" ], paint: { "line-color": "#ffffff", "line-width": 5, "line-blur": 0.3, "line-opacity": 1, "line-emissive-strength": 2.5 } } )
+		map.addLayer( { id: "district-labels", type: "symbol", source: "districts", minzoom: 9, layout: { "text-field": [ "get", "name" ], "text-size": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 11, 13, 14 ], "text-anchor": "center", "text-allow-overlap": false }, paint: { "text-color": "#e9f8ff", "text-halo-color": "rgba(4, 13, 24, 0.9)", "text-halo-width": 2, "text-halo-blur": 1, "text-emissive-strength": 1.6 } } )
+		map.addLayer( { id: "h3-opportunity-fill", type: "fill", source: "h3-opportunity", layout: { visibility: "none" }, paint: { "fill-color": [ "interpolate", [ "linear" ], [ "get", "displayScore" ], 0, "#a72f58", 35, "#793b79", 55, "#40588f", 75, "#087fb8", 90, "#3de0ff", 100, "#e9fcff" ], "fill-opacity": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 0.58, 14, 0.74 ], "fill-emissive-strength": 1.15 } } )
+		map.addLayer( { id: "h3-opportunity-line", type: "line", source: "h3-opportunity", layout: { visibility: "none" }, paint: { "line-color": "#8bdcff", "line-width": [ "interpolate", [ "linear" ], [ "zoom" ], 9, 0.35, 14, 1.1 ], "line-opacity": 0.5, "line-emissive-strength": 1.3 } } )
 		map.addLayer( { id: "selection-radius-fill", type: "fill", source: "selection-radius", paint: { "fill-color": "#2388ff", "fill-opacity": 0.035, "fill-emissive-strength": 0.25 } } )
 		map.addLayer( { id: "voronoi-analysis-fill", type: "fill", source: "voronoi-analysis", paint: { "fill-color": [ "match", [ "get", "kind" ], "candidate", "#009dff", "#315f91" ], "fill-opacity": [ "case", [ "boolean", [ "feature-state", "hover" ], false ], [ "match", [ "get", "kind" ], "candidate", 0.78, 0.55 ], [ "match", [ "get", "kind" ], "candidate", 0.62, 0.34 ] ], "fill-emissive-strength": 1.2 } } )
 		map.addLayer( { id: "voronoi-analysis-glow", type: "line", source: "voronoi-analysis", filter: [ "==", [ "get", "kind" ], "candidate" ], paint: { "line-color": "#00a8ff", "line-width": 14, "line-blur": 8, "line-opacity": 0.9, "line-emissive-strength": 3 } } )
@@ -1087,7 +1222,7 @@ export function createApp() {
 			}
 		} )
 		map.on( "click", "district-fill", event => {
-			if( !isSelecting && territoryFeatures.length === 0 ) {
+			if( !isSelecting && territoryFeatures.length === 0 && opportunityFeatures.length === 0 ) {
 				const district = districtFeatures.find( feature => feature.properties.id === event.features[ 0 ].properties.id )
 				if( district ) {
 					createDistrictPopup( district, event.lngLat )
@@ -1100,7 +1235,12 @@ export function createApp() {
 				showCandidatePopup( feature )
 			}
 		} )
-		;[ "district-fill", "location-candidates" ].forEach( layerId => {
+		map.on( "click", "h3-opportunity-fill", event => {
+			if( map.queryRenderedFeatures( event.point, { layers: [ "location-candidates" ] } ).length === 0 ) {
+				showH3Popup( event.features[ 0 ], event.lngLat )
+			}
+		} )
+		;[ "district-fill", "h3-opportunity-fill", "location-candidates" ].forEach( layerId => {
 			map.on( "mouseenter", layerId, () => map.getCanvas().style.cursor = "pointer" )
 			map.on( "mouseleave", layerId, () => map.getCanvas().style.cursor = "default" )
 		} )
@@ -1211,6 +1351,7 @@ export function createApp() {
 			action.disabled = true
 		}
 	} )
+	root.querySelectorAll( "[data-huff-view]" ).forEach( button => button.addEventListener( "click", () => setHuffView( button.dataset.huffView ) ) )
 
 	root.querySelectorAll( "[data-control='radius'] button" ).forEach( button => button.addEventListener( "click", () => {
 		radius = Number( button.dataset.value )
@@ -1242,6 +1383,7 @@ export function createApp() {
 			saveLayerSettings()
 			syncLayerControls()
 			analyzeCompetition()
+			syncLayerControls()
 			applyCustomLayerSettings()
 			territoryLegend.classList.remove( "is-hidden" )
 			get( "#report-title" ).textContent = "Raqobat tahlili"

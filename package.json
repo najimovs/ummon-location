@@ -21,6 +21,7 @@
 	},
 	"dependencies": {
 		"@turf/turf": "^7.4.0",
+		"h3-js": "^4.5.0",
 		"lucide": "^1.30.0",
 		"mapbox-gl": "^3.28.1"
 	}
