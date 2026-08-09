@@ -67,13 +67,14 @@ export function createApp() {
 
 	root.insertAdjacentHTML( "beforeend", `
 		<header class="topbar">
-			<a class="brand" href="#" aria-label="Ummon Location"><span class="brand-mark">U</span><span><strong>Ummon</strong><small>LOCATION INTELLIGENCE</small></span></a>
+			<a class="brand" href="#" aria-label="Ummon Location"><span class="brand-mark"><img src="/logo.png" alt=""></span><span><strong>Ummon</strong><small>Location Intelligence</small></span></a>
 			<button class="city-selector" type="button"><i class="status-dot"></i>Toshkent <i data-lucide="chevron-down"></i></button>
 			<div class="map-search"><span><i data-lucide="search"></i></span><input type="search" placeholder="Manzil yoki hududni qidiring" aria-label="Manzil qidirish"><kbd>⌘ K</kbd></div>
 			<div class="top-actions"><button type="button" aria-label="Yordam"><i data-lucide="help-circle"></i></button><button type="button" aria-label="Profil"><i data-lucide="user-round"></i></button></div>
 		</header>
 
 		<aside class="sidebar">
+			<span class="nav-label">Workspace</span>
 			<nav>${ navigation }</nav>
 			<div class="sidebar-bottom">
 				<span class="system-status"><i></i><b>Data holati</b><small>OSM · Mapbox</small></span>
@@ -154,7 +155,7 @@ export function createApp() {
 		if( marker ) {
 			marker.remove()
 		}
-		marker = new window.mapboxgl.Marker( { color: "#d7ff3f" } ).setLngLat( point ).addTo( map )
+		marker = new window.mapboxgl.Marker( { color: "#2388ff" } ).setLngLat( point ).addTo( map )
 		updateRadius()
 	}
 
@@ -219,7 +220,7 @@ export function createApp() {
 	}
 
 	const setPoiLayerVisibility = visibility => {
-		[ "fast-food-heatmap", "fast-food-points" ].forEach( layerId => {
+		[ "fast-food-heatmap", "fast-food-point-glow", "fast-food-points" ].forEach( layerId => {
 			if( map.getLayer( layerId ) ) {
 				map.setLayoutProperty( layerId, "visibility", visibility )
 			}
@@ -245,18 +246,31 @@ export function createApp() {
 				maxzoom: 14,
 				paint: {
 					"heatmap-weight": [ "interpolate", [ "linear" ], [ "get", "confidence" ], 0.5, 0.3, 1, 0.75 ],
-					"heatmap-intensity": [ "interpolate", [ "linear" ], [ "zoom" ], 8, 0.28, 13, 0.8 ],
+					"heatmap-intensity": [ "interpolate", [ "linear" ], [ "zoom" ], 8, 0.4, 13, 1.05 ],
 					"heatmap-color": [
 						"interpolate", [ "linear" ], [ "heatmap-density" ],
-						0, "rgba(10, 14, 12, 0)",
-						0.2, "rgba(89, 122, 52, 0.18)",
-						0.45, "rgba(174, 215, 63, 0.38)",
-						0.7, "rgba(215, 255, 63, 0.58)",
-						0.88, "rgba(255, 185, 74, 0.7)",
-						1, "rgba(255, 113, 76, 0.78)",
+						0, "rgba(3, 10, 24, 0)",
+						0.2, "rgba(24, 83, 180, 0.18)",
+						0.45, "rgba(20, 118, 255, 0.38)",
+						0.7, "rgba(31, 183, 255, 0.56)",
+						0.88, "rgba(97, 218, 255, 0.68)",
+						1, "rgba(221, 247, 255, 0.78)",
 					],
-					"heatmap-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 8, 8, 13, 20 ],
-					"heatmap-opacity": [ "interpolate", [ "linear" ], [ "zoom" ], 8, 0.72, 11, 0.68, 14, 0 ],
+					"heatmap-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 8, 11, 13, 25 ],
+					"heatmap-opacity": [ "interpolate", [ "linear" ], [ "zoom" ], 8, 0.82, 11, 0.78, 14, 0 ],
+				},
+			} )
+			map.addLayer( {
+				id: "fast-food-point-glow",
+				type: "circle",
+				source: "fast-food-poi",
+				minzoom: 11,
+				paint: {
+					"circle-color": "#168cff",
+					"circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 11, 7, 15, 15 ],
+					"circle-blur": 0.8,
+					"circle-opacity": [ "interpolate", [ "linear" ], [ "zoom" ], 11, 0, 12.5, 0.42, 16, 0.28 ],
+					"circle-emissive-strength": 2,
 				},
 			} )
 			map.addLayer( {
@@ -265,11 +279,12 @@ export function createApp() {
 				source: "fast-food-poi",
 				minzoom: 11.5,
 				paint: {
-					"circle-color": [ "match", [ "get", "subtype" ], "burger", "#ff9f43", "pizza", "#ff6b6b", "doner_kebab", "#feca57", "chicken", "#ff7f50", "#d7ff3f" ],
-					"circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 11.5, 2.5, 15, 6.5 ],
+					"circle-color": [ "interpolate", [ "linear" ], [ "get", "confidence" ], 0.5, "#1d6ed8", 0.75, "#28a9ff", 1, "#8be3ff" ],
+					"circle-radius": [ "interpolate", [ "linear" ], [ "zoom" ], 11.5, 4.5, 15, 8.5 ],
 					"circle-opacity": [ "interpolate", [ "linear" ], [ "zoom" ], 11.5, 0, 13, 0.9 ],
-					"circle-stroke-color": "#111509",
-					"circle-stroke-width": [ "interpolate", [ "linear" ], [ "zoom" ], 12, 0.5, 15, 1.5 ],
+					"circle-stroke-color": "#07101f",
+					"circle-stroke-width": [ "interpolate", [ "linear" ], [ "zoom" ], 12, 1, 15, 2 ],
+					"circle-emissive-strength": 1.6,
 				},
 			} )
 
@@ -278,17 +293,30 @@ export function createApp() {
 				const confidence = Math.round( Number( properties.confidence ) * 100 )
 				const coordinates = [ ...event.features[ 0 ].geometry.coordinates ]
 				const content = document.createElement( "div" )
+				const header = document.createElement( "div" )
 				const label = document.createElement( "span" )
 				const name = document.createElement( "strong" )
 				const details = document.createElement( "small" )
+				const meta = document.createElement( "div" )
+				const coordinate = document.createElement( "p" )
 				const analyzeButton = document.createElement( "button" )
-				label.textContent = "FAST FOOD POI"
-				name.textContent = properties.name
-				details.textContent = `${ properties.subtype.replaceAll( "_", " " ) } · ${ confidence }% confidence`
-				analyzeButton.textContent = "Shu joyni tahlil qilish"
-				content.append( label, name, details, analyzeButton )
+				header.className = "poi-popup__header"
+				label.className = "poi-popup__label"
+				name.className = "poi-popup__name"
+				details.className = "poi-popup__type"
+				meta.className = "poi-popup__meta"
+				coordinate.className = "poi-popup__coordinate"
+				analyzeButton.className = "poi-popup__action"
+				label.textContent = "Fast food nuqtasi"
+				name.textContent = properties.name || "Nomsiz fast food"
+				details.textContent = properties.subtype.replaceAll( "_", " " )
+				meta.textContent = `Ma’lumot ishonchliligi: ${ confidence }%`
+				coordinate.textContent = `${ coordinates[ 1 ].toFixed( 5 ) }, ${ coordinates[ 0 ].toFixed( 5 ) }`
+				analyzeButton.textContent = "Shu lokatsiyani tahlil qilish"
+				header.append( label, details )
+				content.append( header, name, meta, coordinate, analyzeButton )
 
-				const popup = new window.mapboxgl.Popup( { closeButton: false, offset: 12, className: "poi-popup" } )
+				const popup = new window.mapboxgl.Popup( { closeButton: true, closeOnClick: true, offset: 18, maxWidth: "340px", className: "poi-popup" } )
 					.setLngLat( coordinates )
 					.setDOMContent( content )
 					.addTo( map )
@@ -311,8 +339,9 @@ export function createApp() {
 	window.addEventListener( "ummon:map-ready", event => {
 		map = event.detail
 		map.addSource( "selection-radius", { type: "geojson", data: { type: "FeatureCollection", features: [] } } )
-		map.addLayer( { id: "selection-radius-fill", type: "fill", source: "selection-radius", paint: { "fill-color": "#d7ff3f", "fill-opacity": 0.09 } } )
-		map.addLayer( { id: "selection-radius-line", type: "line", source: "selection-radius", paint: { "line-color": "#d7ff3f", "line-width": 2, "line-dasharray": [ 2, 2 ] } } )
+		map.addLayer( { id: "selection-radius-fill", type: "fill", source: "selection-radius", paint: { "fill-color": "#2388ff", "fill-opacity": 0.14, "fill-emissive-strength": 0.65 } } )
+		map.addLayer( { id: "selection-radius-glow", type: "line", source: "selection-radius", paint: { "line-color": "#168cff", "line-width": 10, "line-blur": 7, "line-opacity": 0.7, "line-emissive-strength": 2.4 } } )
+		map.addLayer( { id: "selection-radius-line", type: "line", source: "selection-radius", paint: { "line-color": "#8bd8ff", "line-width": 3, "line-emissive-strength": 1.8 } } )
 		map.on( "click", event => {
 			if( !isSelecting ) {
 				return
