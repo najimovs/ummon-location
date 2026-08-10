@@ -107,6 +107,7 @@ export function createApp() {
 
 	root.insertAdjacentHTML( "beforeend", `
 		<header class="topbar">
+			<div class="top-brand" aria-label="Ummon Location"><img src="/logo.png" alt=""><span><strong>Ummon</strong><small>Location AI</small></span></div>
 			<nav class="top-nav" aria-label="Asosiy vositalar">${ navigation }</nav>
 			<div class="map-search"><span><i data-lucide="search"></i></span><input type="search" placeholder="Fast food yoki manzilni qidiring" aria-label="Fast food qidirish" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-results"><kbd>⌘ K</kbd><div class="search-results" id="search-results" role="listbox" hidden></div></div>
 			<div class="layer-control">
@@ -137,7 +138,6 @@ export function createApp() {
 		</header>
 
 		<main class="map-workspace">
-			<div class="map-brand" aria-label="Ummon Location"><span><img src="/logo.png" alt=""></span><div><strong>Ummon</strong><small>Location Intelligence</small></div></div>
 			<section class="workflow-panel is-hidden" data-panel="workflow">
 				<div class="panel-top"><div><span class="eyebrow">YANGI TAHLIL</span><h2 id="workflow-title">Lokatsiyani belgilang</h2></div><button class="close-button" type="button"><i data-lucide="x"></i></button></div>
 				<p id="workflow-description">Xaritadan fast food ochmoqchi bo‘lgan aniq nuqtani tanlang.</p>
@@ -752,7 +752,7 @@ export function createApp() {
 		action.disabled = false
 		hint.classList.add( "is-hidden" )
 		map.setFilter( "district-selected", [ "==", [ "get", "id" ], selectedDistrictId ] )
-		map.fitBounds( bbox( district ), { padding: { top: 75, right: 75, bottom: 75, left: window.innerWidth > 800 ? 470 : 40 }, duration: 800 } )
+		map.fitBounds( bbox( district ), { padding: { top: 75, right: window.innerWidth > 800 ? 470 : 40, bottom: 75, left: 75 }, duration: 800 } )
 	}
 	const normalizeSearch = value => String( value || "" ).toLocaleLowerCase( "uz" ).replace( /[’'`]/g, "" ).replace( /[^\p{L}\p{N}]+/gu, " " ).trim()
 	const distanceMeters = ( point, coordinates ) => {
