@@ -19,6 +19,7 @@ import { area, bbox, booleanPointInPolygon, circle, featureCollection, intersect
 import { createComparisonAdvice, createLocationAdvice } from "../analysis/locationAdvisor.js"
 import { createCompetitionModel, explainCompetitionThreat } from "../analysis/smartCompetition.js"
 import { saveAnalysisFeedback } from "../analysis/feedbackStore.js"
+import { setupI18n } from "../i18n.js"
 
 const workflows = {
 	analyze: {
@@ -135,6 +136,7 @@ export function createApp() {
 					<footer>Tanlovlar ushbu qurilmada saqlanadi</footer>
 				</section>
 			</div>
+			<div class="language-switcher" data-no-i18n aria-label="Language"><button type="button" data-language="en">EN</button><button type="button" data-language="uz">UZ</button></div>
 		</header>
 
 		<main class="map-workspace">
@@ -193,6 +195,7 @@ export function createApp() {
 		icons: { ArrowLeft, ArrowLeftRight, ArrowRight, ChevronDown, FileText, Layers3, LocateFixed, MapPin, Search, Sparkles, ThumbsDown, ThumbsUp, X },
 		attrs: { "stroke-width": 1.8 },
 	} )
+	setupI18n( root )
 
 	let map
 	let marker
